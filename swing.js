@@ -649,13 +649,16 @@
   var dragging = null;
 
   function fitCanvas() {
-    var r = el.video.getBoundingClientRect();
-    if (!r.width) return;
+    // getBoundingClientRect 는 확대(transform)가 반영된 크기를 준다. 그 값으로
+    // 캔버스를 잡으면 부모가 한 번 더 확대해 두 배로 커지고 선이 영상과 어긋난다.
+    // 확대와 무관한 배치 크기(clientWidth/Height)를 써야 한다.
+    var w = el.video.clientWidth, h = el.video.clientHeight;
+    if (!w || !h) return;
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    el.canvas.width = Math.round(r.width * dpr);
-    el.canvas.height = Math.round(r.height * dpr);
-    el.canvas.style.width = r.width + 'px';
-    el.canvas.style.height = r.height + 'px';
+    el.canvas.width = Math.round(w * dpr);
+    el.canvas.height = Math.round(h * dpr);
+    el.canvas.style.width = w + 'px';
+    el.canvas.style.height = h + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     draw();
   }
@@ -862,17 +865,26 @@
         ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.5 / zk; ctx.stroke();
       } else if (sh.type === 'trace') {
         var key = sh.points[0], pts = [];
-        D.FRAMES.forEach(function (f) {
-          var fr = S.frames[f.id];
-          if (fr && fr.marks[key]) pts.push(toPx(fr.marks[key]));
-        });
+        if (S.track && S.track.length) {
+          // 전 프레임을 이으면 진짜 스윙 궤적이 된다. 구간 8개만 이으면 지그재그가 된다.
+          S.track.forEach(function (f) { if (f.marks[key]) pts.push(toPx(f.marks[key])); });
+        } else {
+          D.FRAMES.forEach(function (f) {
+            var fr = S.frames[f.id];
+            if (fr && fr.marks[key]) pts.push(toPx(fr.marks[key]));
+          });
+        }
         if (pts.length > 1) {
           ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
           for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
           ctx.stroke();
         }
-        pts.forEach(function (p) {
-          ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+        // 전 프레임을 점으로 다 찍으면 지저분하다. 구간 위치에만 점을 둔다.
+        D.FRAMES.forEach(function (f) {
+          var fr = S.frames[f.id];
+          if (!fr || !fr.marks[key]) return;
+          var p = toPx(fr.marks[key]);
+          ctx.beginPath(); ctx.arc(p.x, p.y, 3.2 / zk, 0, Math.PI * 2);
           ctx.fillStyle = sh.color; ctx.fill();
         });
       }
@@ -963,7 +975,7 @@
     el['stage-zoom'].style.transform = 'scale(' + z.k.toFixed(3) + ')';
     el['t-zoom'].classList.add('on');
   }
-  function setZoom(on) { applyZoom(on); draw(); }
+  function setZoom(on) { applyZoom(on); fitCanvas(); }
   el['t-zoom'].addEventListener('click', function () {
     if (!S.zoom) { computeZoom(); }
     setZoom(!this.classList.contains('on'));
