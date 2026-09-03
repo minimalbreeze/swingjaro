@@ -74,7 +74,7 @@
    * M  : 종횡비 보정된 좌표 — 모든 측정에 쓴다.
    * raw: 원본 정규화 좌표 — 캔버스에 그릴 도형에 쓴다.
    */
-  function analyzeDTL(M, raw, club, k, aspect, shift) {
+  function analyzeDTL(M, raw, club, k, aspect, shift, session_ballEstimated) {
     var m = {}, shapes = [], P1 = M.P1, R1 = raw.P1;
     if (!P1) return { metrics: m, shapes: shapes };
 
@@ -94,16 +94,21 @@
       return signedDist(p, ballRef, P1.hands) / bandRef;
     }
 
-    m.planeAngleP1 = { v: slope(ballRef, P1.hands), unit: '°',
-      label: '어드레스 샤프트 각도', ideal: [club.planeDeg - club.planeTol * k, club.planeDeg + club.planeTol * k] };
+    if (!session_ballEstimated) {
+      m.planeAngleP1 = { v: slope(ballRef, P1.hands), unit: '°',
+        label: '어드레스 샤프트 각도',
+        ideal: [club.planeDeg - club.planeTol * k, club.planeDeg + club.planeTol * k] };
+    }
     m.spineTiltP1 = { v: tilt(P1.hip, P1.shoulder), unit: '°',
       label: '어드레스 척추 기울기', ideal: [club.spineTilt[0] - 5 * k, club.spineTilt[1] + 5 * k] };
 
     if (M.P4) {
       m.clubPlaneP4 = { v: planeRatio(M.P4.clubhead), unit: '',
         label: '톱 클럽 위치 (플레인 밴드)', ideal: [-1.15 - 0.5 * (k - 1), 1.75 + 0.5 * (k - 1)] };
-      m.topShaftAngle = { v: elevation(M.P4.hands, M.P4.clubhead), unit: '°',
-        label: '톱 클럽헤드 높이 (+ 손보다 위)', ideal: [-10 * k, 90] };
+      if (M.P4.clubhead) {
+        m.topShaftAngle = { v: elevation(M.P4.hands, M.P4.clubhead), unit: '°',
+          label: '톱 클럽헤드 높이 (+ 손보다 위)', ideal: [-10 * k, 90] };
+      }
       m.headMoveDTL = { v: dist(M.P4.head, P1.head) / spineLen, unit: '×척추',
         label: '머리 이동 (어드레스→톱)', ideal: [0, 0.22 * k] };
     }
@@ -176,10 +181,12 @@
       var p7 = M.P7, hipC7 = mid(p7.leadHip, p7.trailHip);
       m.weightShift = { v: ((hipC7.x - hipC1.x) * tgt) / hipW, unit: '×골반너비',
         label: '임팩트 골반 이동 (타깃 쪽)', ideal: [0.06 / k, 0.62 * k] };
-      m.shaftLeanP7 = { v: tilt(p7.clubhead, p7.hands) *
-          Math.sign(((p7.hands.x - p7.clubhead.x) * tgt) || 1), unit: '°',
-        label: '임팩트 샤프트 기울기 (+ 손이 앞섬)',
-        ideal: [club.shaftLeanP7[0] - 6 * k, club.shaftLeanP7[1] + 6 * k] };
+      if (p7.clubhead) {
+        m.shaftLeanP7 = { v: tilt(p7.clubhead, p7.hands) *
+            Math.sign(((p7.hands.x - p7.clubhead.x) * tgt) || 1), unit: '°',
+          label: '임팩트 샤프트 기울기 (+ 손이 앞섬)',
+          ideal: [club.shaftLeanP7[0] - 6 * k, club.shaftLeanP7[1] + 6 * k] };
+      }
     }
     if (M.P10) {
       m.hipTurnFinish = { v: dist(M.P10.leadHip, M.P10.trailHip) / hipW, unit: '×골반너비',
@@ -278,7 +285,7 @@
     var aspect = session.aspect > 0 ? session.aspect : 1;   // 영상 가로/세로 비
     var M = toAspect(session.marks, aspect);
     var res = session.view === 'dtl'
-      ? analyzeDTL(M, session.marks, club, k, aspect, session.planeShift || 0)
+      ? analyzeDTL(M, session.marks, club, k, aspect, session.planeShift || 0, !!session.ballEstimated)
       : analyzeFO(M, session.marks, club, k, aspect);
     var faults = findFaults(res.metrics, session.view, k);
 
@@ -289,7 +296,8 @@
     return {
       club: session.club, view: session.view, sensitivity: session.sensitivity,
       metrics: res.metrics, shapes: res.shapes, faults: faults, score: score,
-      framesUsed: Object.keys(session.marks)
+      framesUsed: Object.keys(session.marks), ballEstimated: !!session.ballEstimated,
+      auto: !!session.auto
     };
   }
 

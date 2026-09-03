@@ -140,9 +140,26 @@
       </details>
     </section>
 
-    <!-- 3. 키프레임 지정 + 관절 마킹 -->
+    <!-- 3. 자동 분석 -->
+    <section class="screen" id="s-auto" hidden>
+      <h2 class="s-title">③ 자동으로 분석합니다</h2>
+      <div class="autobox" id="autobox">
+        <div class="auto-ico" id="auto-ico">🤖</div>
+        <div class="auto-msg" id="auto-msg">영상을 훑어 스윙을 찾는 중…</div>
+        <div class="auto-bar"><i id="auto-bar-i"></i></div>
+        <div class="auto-sub" id="auto-sub">관절을 프레임마다 찾고, 손의 움직임으로
+          어드레스·톱·임팩트·피니시를 스스로 잡습니다. 잠시만요.</div>
+        <div class="auto-btns" id="auto-btns" hidden>
+          <button type="button" class="mini prim wide" id="auto-retry">다시 시도</button>
+          <button type="button" class="mini wide" id="auto-manual">직접 찍어서 분석하기</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 구간 확인 · 손보기 -->
     <section class="screen wide" id="s-mark" hidden>
-      <h2 class="s-title">③ 구간을 잡고 관절을 찍어주세요</h2>
+      <h2 class="s-title" id="mark-title">구간 확인 · 손보기</h2>
+      <p class="s-lead" id="mark-lead"></p>
 
       <!-- 무대는 하나뿐이다. 구간 지정 화면과 진단 화면이 번갈아 가져다 쓴다. -->
       <div id="stage-slot-mark"></div>
@@ -276,6 +293,7 @@
 <script src="swing-faults.js"></script>
 <script src="swing-analyze.js"></script>
 <script src="swing-pose.js"></script>
+<script src="swing-auto.js"></script>
 <script src="swing-install.js"></script>
 <script src="swing-shot.js"></script>
 <script src="swing-log.js"></script>

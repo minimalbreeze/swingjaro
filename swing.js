@@ -16,6 +16,7 @@
   var S = {
     club: 'mid', view: 'dtl', sensitivity: 'normal', handed: 'right',
     autoUsed: false,   // 이번 분석에 자동 인식이 쓰였는지
+    ballEstimated: false,  // 볼 위치를 추정으로 놓았는지
     videoURL: null, duration: 0,
     frames: {},          // { P1:{t:초, marks:{head:{x,y},...}}, ... }
     curFrame: null,      // 지금 마킹 중인 프레임 id
@@ -42,11 +43,12 @@
    'mydist','mydist-sum','mydist-grid',
    'btn-shape','btn-ask','shape-grid','shape-seg','shapebox','ask-q','askbox',
    'install-card','install-btn','install-steps','install-steps-b',
-   'vstat','stickybar','sb-prog'].forEach(function (id) {
+   'vstat','stickybar','sb-prog','auto-msg','auto-sub','auto-bar-i','auto-ico',
+   'auto-btns','auto-retry','auto-manual','mark-title','mark-lead'].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
-  var SCREENS = ['setup','video','mark','report','fit','shape','ask','log'];
+  var SCREENS = ['setup','video','auto','mark','report','fit','shape','ask','log'];
   function show(step) {
     SCREENS.forEach(function (s) {
       var n = document.getElementById('s-' + s);
@@ -67,6 +69,12 @@
     // 무대(영상+캔버스)는 하나뿐이라 필요한 화면으로 옮겨 붙인다.
     var slot = step === 'mark' ? el['stage-slot-mark']
              : step === 'report' ? el['stage-slot-report'] : null;
+    if (step === 'mark') {
+      el['mark-title'].textContent = S.autoUsed ? '구간 확인 · 손보기' : '③ 구간을 잡고 관절을 찍어주세요';
+      el['mark-lead'].innerHTML = S.autoUsed
+        ? '자동으로 찾은 구간과 관절입니다. <b>점을 끌어서</b> 위치를 고칠 수 있고, 구간 칩을 눌러 다른 순간으로 넘길 수 있습니다.'
+        : '구간 칩을 눌러 그 순간을 지정한 뒤, 안내대로 관절을 찍으세요.';
+    }
     if (slot && el.stage.parentNode !== slot) slot.appendChild(el.stage);
     el.stage.hidden = !slot;
     // 고정 바는 구간 지정 화면에서만 띄운다
@@ -303,14 +311,88 @@
     vstat('');
     S.duration = el.video.duration || 0;
     el.seek.value = 0;
-    buildFrames(); show('mark');
-    setTimeout(function () { seekTo(Math.min(0.05, S.duration)); }, 60);
+    buildFrames();
+    show('auto');
+    setTimeout(runAuto, 120);
   });
   el.video.addEventListener('error', function () {
     if (!el.video.src) return;
     // 아이폰에서 찍은 HEVC(H.265) MOV 는 사파리 밖에서 못 여는 경우가 있다.
     vstat('이 영상을 열지 못했습니다. 아이폰이라면 설정 → 카메라 → 포맷을 "높은 호환성"으로 ' +
       '바꿔 다시 찍거나, 사파리에서 열어보세요. (MP4·H.264가 가장 안전합니다)', 'bad');
+  });
+
+  /* ── 자동 분석 ────────────────────────────────────────────────
+   * 영상만 넣으면 여기서 구간과 관절을 스스로 찾는다. 사람이 할 일은
+   * 결과가 이상할 때 점을 끌어 고치는 것뿐이다.
+   */
+  function autoMsg(msg, sub, pct) {
+    el['auto-msg'].textContent = msg;
+    if (sub != null) el['auto-sub'].innerHTML = sub;
+    if (pct != null) el['auto-bar-i'].style.width = Math.round(pct * 100) + '%';
+  }
+  function autoFail(msg, sub) {
+    el['auto-ico'].textContent = '⚠️';
+    autoMsg(msg, sub, 1);
+    el['auto-bar-i'].style.width = '0%';
+    el['auto-btns'].hidden = false;
+  }
+  function runAuto() {
+    el['auto-ico'].textContent = '🤖';
+    el['auto-btns'].hidden = true;
+    autoMsg('자동 인식 준비 중…', '처음 한 번은 모델을 내려받습니다(약 6MB). 다음부터는 바로 시작합니다.', 0.02);
+
+    window.SwingPose.load(function (st) { autoMsg(st, null, 0.06); })
+      .then(function () {
+        autoMsg('영상을 훑는 중…', '프레임마다 관절을 찾고 있습니다.', 0.1);
+        return window.SwingAuto.scan(el.video, function (p) {
+          autoMsg('영상을 훑는 중… ' + Math.round(p * 100) + '%', null, 0.1 + p * 0.75);
+        });
+      })
+      .then(function (track) {
+        if (!track || track.length < 8) {
+          throw new Error('영상에서 사람을 거의 찾지 못했습니다.');
+        }
+        autoMsg('스윙 구간을 찾는 중…', null, 0.9);
+        var res = window.SwingAuto.findPhases(track);
+        if (!res) throw new Error('스윙의 흐름(어드레스→톱→임팩트→피니시)을 찾지 못했습니다.');
+
+        var aspect = (el.video.videoWidth && el.video.videoHeight)
+          ? el.video.videoWidth / el.video.videoHeight : 1;
+        var built = window.SwingAuto.buildMarks(res, S.view, S.handed, D.CLUBS[S.club], aspect);
+
+        // 찾은 구간을 그대로 우리 상태에 넣는다. 이제부터는 손으로 고칠 수도 있다.
+        S.frames = {};
+        Object.keys(res.idx).forEach(function (fid) {
+          S.frames[fid] = { t: res.track[res.idx[fid]].t, marks: built.marks[fid] };
+        });
+        S.autoUsed = true;
+        S.ballEstimated = built.ballEstimated;
+        buildFrames();
+        autoMsg('분석 중…', null, 0.97);
+        return new Promise(function (r) { setTimeout(r, 60); }).then(function () {
+          runAnalysis();
+          autoMsg('완료', null, 1);
+        });
+      })
+      .catch(function (e) {
+        var m = (e && e.message) || '';
+        if (/fetch|network|import|Load|CORS|모듈/i.test(m)) {
+          autoFail('자동 분석을 불러오지 못했습니다',
+            '인터넷에 연결되어 있는지, 사내망·기내 와이파이처럼 외부 접속이 막힌 곳은 아닌지 확인해 주세요. ' +
+            '직접 찍어서 분석해도 결과는 똑같습니다.');
+        } else {
+          autoFail('자동으로 스윙을 찾지 못했습니다',
+            esc(m) + '<br><br>몸 전체가 화면에 들어오고, 스윙 시작 전부터 피니시 후까지 담긴 영상이어야 합니다. ' +
+            '너무 어둡거나 사람이 작게 나오면 관절을 못 찾습니다. 직접 찍어서 분석하셔도 됩니다.');
+        }
+      });
+  }
+  el['auto-retry'].addEventListener('click', runAuto);
+  el['auto-manual'].addEventListener('click', function () {
+    S.frames = {}; S.autoUsed = false; S.ballEstimated = false;
+    buildFrames(); show('mark');
+    seekTo(Math.min(0.05, S.duration));
   });
 
   /* ── 3. 스크러빙 ─────────────────────────────────────────────── */
@@ -356,6 +438,14 @@
     if (fid === 'P1') list = list.concat(D.VIEWS[S.view].extra);
     return list;
   }
+  function coreFor(fid) {
+    // 분석에 반드시 있어야 하는 점. 클럽헤드와 볼은 빠져도 그 항목만 건너뛴다.
+    return jointList().filter(function (j) { return j.id !== 'clubhead'; });
+  }
+  function isReady(fid) {
+    var f = S.frames[fid];
+    return !!f && coreFor(fid).every(function (j) { return f.marks[j.id]; });
+  }
   function isMarked(fid) {
     var f = S.frames[fid];
     if (!f) return false;
@@ -363,8 +453,8 @@
   }
   function buildFrames() {
     el.frames.innerHTML = D.FRAMES.map(function (f) {
-      var set = !!S.frames[f.id], done = isMarked(f.id);
-      var st = done ? '✓ 완료' : set ? '점 찍기' : '미지정';
+      var set = !!S.frames[f.id], done = isReady(f.id);
+      var st = done ? (isMarked(f.id) ? '✓ 완료' : '✓ 자동') : set ? '점 찍기' : '미지정';
       return '<button type="button" class="fchip' + (f.required ? ' req' : '') +
         (set ? ' set' : '') + (done ? ' marked' : '') + (S.curFrame === f.id ? ' cur' : '') +
         '" data-frame="' + f.id + '"><span class="em">' + f.emoji + '</span>' +
@@ -374,7 +464,7 @@
   }
   function updateReady() {
     var need = D.FRAMES.filter(function (f) { return f.required; });
-    var missing = need.filter(function (f) { return !isMarked(f.id); });
+    var missing = need.filter(function (f) { return !isReady(f.id); });
     el['go-report'].disabled = missing.length > 0;
     var doneN = need.length - missing.length;
     el['sb-prog'].innerHTML = missing.length
@@ -694,16 +784,18 @@
   }
 
   /* ── 7. 진단 리포트 ──────────────────────────────────────────── */
-  el['go-report'].addEventListener('click', function () {
+  el['go-report'].addEventListener('click', runAnalysis);
+
+  function runAnalysis() {
     var marks = {};
     Object.keys(S.frames).forEach(function (fid) {
-      if (isMarked(fid)) marks[fid] = S.frames[fid].marks;
+      if (isReady(fid)) marks[fid] = S.frames[fid].marks;
     });
     // 세로/가로 영상에 따라 x 와 y 의 축척이 다르다. 종횡비를 넘겨 보정하게 한다.
     var aspect = (el.video.videoWidth && el.video.videoHeight)
       ? el.video.videoWidth / el.video.videoHeight : 1;
     S.report = A.analyze({ club: S.club, view: S.view, sensitivity: S.sensitivity,
-      marks: marks, aspect: aspect,
+      marks: marks, aspect: aspect, auto: S.autoUsed, ballEstimated: S.ballEstimated,
       planeShift: (window.SwingShot.SHAPES[S.shape] || {}).planeShift || 0 });
     S.report.autoUsed = S.autoUsed;
     renderReport(S.report);
@@ -714,11 +806,11 @@
     seekTo(S.frames[S.viewFrame].t);
     show('report');
     requestAnimationFrame(function () { fitCanvas(); draw(); });
-  });
+  }
 
   // 진단 화면에서 구간을 눌러 넘기면 그 순간 영상 위에 오버레이가 다시 그려진다.
   function buildReportFrames() {
-    var have = D.FRAMES.filter(function (f) { return isMarked(f.id); });
+    var have = D.FRAMES.filter(function (f) { return isReady(f.id); });
     el['report-frames'].innerHTML = have.map(function (f) {
       return '<button type="button" class="fchip' + (S.viewFrame === f.id ? ' cur marked' : ' set') +
         '" data-view-frame="' + f.id + '"><span class="em">' + f.emoji + '</span>' +
@@ -829,6 +921,17 @@
         '</p><button type="button" class="mini" id="rep-shape">구질 가이드 보기 ›</button></div>');
     }
 
+    if (R.auto) {
+      h.push('<div class="autonote"><b>🤖 자동으로 분석했습니다</b>' +
+        '<p>구간(어드레스·톱·임팩트·피니시)과 관절을 영상에서 스스로 찾았습니다. ' +
+        (R.ballEstimated
+          ? '<b>볼 위치만 추정</b>했습니다 — 클럽과 볼은 사람 관절이 아니라 모델이 못 봅니다. ' +
+            '그래서 클럽헤드가 필요한 항목(톱 클럽 위치, 임팩트 샤프트 기울기)은 빼고 쟀습니다. '
+          : '') +
+        '결과가 이상하면 <b>구간</b>에서 점을 끌어 고치면 다시 계산됩니다.</p>' +
+        '<button type="button" class="mini" id="rep-fix">구간 열어서 손보기 ›</button></div>');
+    }
+
     var fb = focusBlock();
     if (fb) h.push(fb);
 
@@ -927,6 +1030,7 @@
 
   el.report.addEventListener('click', function (e) {
     if (e.target.id === 'rep-shape') { showShape(); return; }
+    if (e.target.id === 'rep-fix') { show('mark'); return; }
     var fbtn = e.target.closest('[data-focus]');
     if (fbtn) {
       setFocus(fbtn.dataset.focus || null);
