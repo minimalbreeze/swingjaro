@@ -47,12 +47,37 @@
 
   <main id="main">
 
-    <!-- 이동식 무대 -->
-    <div class="stage" id="stage">
-      <div class="stage-in" id="stage-in">
-        <video id="video" playsinline preload="auto" muted></video>
-        <canvas id="canvas"></canvas>
-        <div class="stage-badge" id="stage-badge"></div>
+    <!-- 이동식 스튜디오: 영상 + 재생 조작. 필요한 화면으로 옮겨 붙인다. -->
+    <div id="studio">
+      <div class="stage" id="stage">
+        <div class="stage-in" id="stage-in">
+          <video id="video" playsinline preload="auto" muted></video>
+          <canvas id="canvas"></canvas>
+          <div class="stage-badge" id="stage-badge"></div>
+        </div>
+      </div>
+
+      <div class="scrub">
+        <div class="seekwrap">
+          <input type="range" id="seek" min="0" max="1000" value="0" />
+          <div class="seekmarks" id="seekmarks"></div>
+        </div>
+        <div class="scrub-row">
+          <button type="button" class="mini" data-nudge="-10">≪</button>
+          <button type="button" class="mini" data-nudge="-1">‹ 1</button>
+          <span class="tcode" id="tcode">0.00s</span>
+          <button type="button" class="mini" data-nudge="1">1 ›</button>
+          <button type="button" class="mini" data-nudge="10">≫</button>
+        </div>
+        <div class="scrub-row">
+          <button type="button" class="mini play" id="play">▶ 재생</button>
+          <span class="seg tiny" id="rate-seg">
+            <button type="button" data-r="0.1">0.1×</button>
+            <button type="button" data-r="0.25" class="on">0.25×</button>
+            <button type="button" data-r="0.5">0.5×</button>
+            <button type="button" data-r="1">1×</button>
+          </span>
+        </div>
       </div>
     </div>
 
@@ -164,25 +189,6 @@
       <!-- 무대는 하나뿐이다. 구간 지정 화면과 진단 화면이 번갈아 가져다 쓴다. -->
       <div id="stage-slot-mark"></div>
 
-      <div class="scrub">
-        <input type="range" id="seek" min="0" max="1000" value="0" />
-        <div class="scrub-row">
-          <button type="button" class="mini" data-nudge="-10">≪</button>
-          <button type="button" class="mini" data-nudge="-1">‹ 1프레임</button>
-          <span class="tcode" id="tcode">0.00s</span>
-          <button type="button" class="mini" data-nudge="1">1프레임 ›</button>
-          <button type="button" class="mini" data-nudge="10">≫</button>
-        </div>
-        <div class="scrub-row">
-          <button type="button" class="mini" id="play">▶ 재생</button>
-          <span class="seg tiny" id="rate-seg">
-            <button type="button" data-r="0.15">0.15×</button>
-            <button type="button" data-r="0.35" class="on">0.35×</button>
-            <button type="button" data-r="1">1×</button>
-          </span>
-        </div>
-      </div>
-
       <div class="frames" id="frames"></div>
 
       <div class="mark-panel" id="mark-panel" hidden>
@@ -206,10 +212,16 @@
 
     <!-- 4. 진단 -->
     <section class="screen wide" id="s-report" hidden>
-      <h2 class="s-title">④ 진단 결과</h2>
-      <p class="s-lead">아래 구간 버튼을 누르면 그 순간의 영상 위에 정상 플레인과 내 스윙이 함께 그려집니다.</p>
+      <h2 class="s-title">④ 스윙 진단</h2>
       <div id="stage-slot-report"></div>
-      <div class="frames" id="report-frames"></div>
+
+      <div class="flowhead">
+        <span>스윙 흐름</span>
+        <em id="flow-hint">재생하면 지금 구간에 불이 들어옵니다</em>
+      </div>
+      <div class="flow" id="report-flow"></div>
+
+      <div id="step-detail"></div>
       <div id="report"></div>
       <div id="outcome-slot"></div>
       <button class="cta" id="go-fit" type="button">구질·거리 넣고 장비 세팅 받기 ›</button>

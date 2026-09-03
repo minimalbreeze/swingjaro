@@ -38,7 +38,8 @@
    'frames','mark-panel','mark-frame','mark-progress','mark-target','mark-undo','mark-copy',
    'mark-clear','mark-done','go-report','mark-need','report','go-fit','flight-grid','traj-seg',
    'contact-seg','carry','go-fitresult','fitreport','btn-reset','main',
-   'stage','stage-slot-mark','stage-slot-report','report-frames',
+   'stage','studio','stage-slot-mark','stage-slot-report','report-flow',
+   'step-detail','seekmarks','flow-hint',
    'hand-seg','mark-auto','auto-note','btn-log','logbox','outcome-slot',
    'mydist','mydist-sum','mydist-grid',
    'btn-shape','btn-ask','shape-grid','shape-seg','shapebox','ask-q','askbox',
@@ -75,8 +76,8 @@
         ? '자동으로 찾은 구간과 관절입니다. <b>점을 끌어서</b> 위치를 고칠 수 있고, 구간 칩을 눌러 다른 순간으로 넘길 수 있습니다.'
         : '구간 칩을 눌러 그 순간을 지정한 뒤, 안내대로 관절을 찍으세요.';
     }
-    if (slot && el.stage.parentNode !== slot) slot.appendChild(el.stage);
-    el.stage.hidden = !slot;
+    if (slot && el.studio.parentNode !== slot) slot.appendChild(el.studio);
+    el.studio.hidden = !slot;
     // 고정 바는 구간 지정 화면에서만 띄운다
     el.stickybar.classList.toggle('show', step === 'mark');
 
@@ -310,6 +311,8 @@
   el.video.addEventListener('loadedmetadata', function () {
     vstat('');
     S.duration = el.video.duration || 0;
+    var on = el['rate-seg'].querySelector('.on');
+    el.video.playbackRate = on ? +on.dataset.r : 0.25;
     el.seek.value = 0;
     buildFrames();
     show('auto');
@@ -410,6 +413,15 @@
     var t = el.video.currentTime || 0;
     el.tcode.textContent = t.toFixed(2) + 's';
     if (S.duration) el.seek.value = Math.round((t / S.duration) * 1000);
+    if (S.report) {
+      // 첫 구간(어드레스) 전이면 아무 데도 불이 들어오면 안 된다.
+      // 안 그러면 직전에 골라둔 칩이 켜진 채로 남는다.
+      var st = stepAt(t);
+      litFlow(st);
+      if (st && st !== S.viewFrame && el.video.paused) {
+        S.viewFrame = st; buildFlow(); renderStepDetail(); draw();
+      }
+    }
   }
   document.querySelectorAll('[data-nudge]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -802,27 +814,87 @@
     S.lastRecordId = saveHistory(S.report);
     renderOutcomeForm();
     S.viewFrame = S.report.framesUsed.indexOf('P7') >= 0 ? 'P7' : S.report.framesUsed[0];
-    buildReportFrames();
+    buildFlow(); buildSeekMarks(); renderStepDetail();
     seekTo(S.frames[S.viewFrame].t);
     show('report');
     requestAnimationFrame(function () { fitCanvas(); draw(); });
   }
 
-  // 진단 화면에서 구간을 눌러 넘기면 그 순간 영상 위에 오버레이가 다시 그려진다.
-  function buildReportFrames() {
-    var have = D.FRAMES.filter(function (f) { return isReady(f.id); });
-    el['report-frames'].innerHTML = have.map(function (f) {
-      return '<button type="button" class="fchip' + (S.viewFrame === f.id ? ' cur marked' : ' set') +
-        '" data-view-frame="' + f.id + '"><span class="em">' + f.emoji + '</span>' +
-        esc(f.label) + '<span class="st">' + S.frames[f.id].t.toFixed(2) + 's</span></button>';
-    }).join('');
+  /* ── 스윙 흐름 ────────────────────────────────────────────────
+   * 영상 바로 아래에 8단계를 늘어놓고, 재생하는 동안 지금 지나는 구간에
+   * 불이 들어온다. 문제가 잡힌 구간은 개수와 심각도를 함께 보여준다.
+   */
+  function faultsOfStep(fid) {
+    if (!S.report) return [];
+    return S.report.faults.filter(function (f) {
+      return D.FAULT_STEP[F.FAULTS[f.faultId].phase] === fid;
+    });
   }
-  el['report-frames'].addEventListener('click', function (e) {
+  // 지금 재생 위치가 어느 구간인지 (구간 시각 중 현재 시각을 넘지 않는 마지막 것)
+  function stepAt(t) {
+    var cur = null;
+    D.FRAMES.forEach(function (f) {
+      var fr = S.frames[f.id];
+      if (fr && isReady(f.id) && fr.t <= t + 0.001) cur = f.id;
+    });
+    return cur;
+  }
+  function buildFlow() {
+    var have = D.FRAMES.filter(function (f) { return isReady(f.id); });
+    el['report-flow'].innerHTML = have.map(function (f) {
+      var fl = faultsOfStep(f.id);
+      var sev = fl.reduce(function (m, x) { return Math.max(m, x.sev); }, 0);
+      var badge = fl.length
+        ? '<span class="fb s' + sev + '">' + fl.length + '</span>'
+        : '<span class="fb ok">✓</span>';
+      return '<button type="button" class="step' + (S.viewFrame === f.id ? ' sel' : '') +
+        (fl.length ? ' bad s' + sev : '') + '" data-view-frame="' + f.id + '">' +
+        badge + '<span class="em">' + f.emoji + '</span>' +
+        '<span class="nm">' + esc(f.label) + '</span>' +
+        '<span class="tt">' + S.frames[f.id].t.toFixed(2) + 's</span></button>';
+    }).join('');
+    var lit = el['report-flow'].querySelector('.step.sel');
+    if (lit && lit.scrollIntoView) lit.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }
+  // 재생 중에는 다시 그리지 않고 불만 옮긴다(끊김 방지)
+  function litFlow(fid) {
+    Array.prototype.forEach.call(el['report-flow'].children, function (n) {
+      n.classList.toggle('live', n.dataset.viewFrame === fid);
+    });
+  }
+  function renderStepDetail() {
+    var f = null;
+    D.FRAMES.forEach(function (x) { if (x.id === S.viewFrame) f = x; });
+    if (!f || !S.report) { el['step-detail'].innerHTML = ''; return; }
+    var fl = faultsOfStep(f.id), h = [];
+    h.push('<div class="sd"><div class="sd-h"><span class="em">' + f.emoji + '</span>' +
+      '<div><b>' + esc(f.label) + '</b><span>' + esc(f.what) + '</span></div>' +
+      '<em>' + S.frames[f.id].t.toFixed(2) + 's</em></div>');
+    if (!fl.length) {
+      h.push('<p class="sd-ok">이 구간에서는 기준을 벗어난 항목이 없습니다.</p>');
+    } else {
+      fl.forEach(function (x) { h.push(faultCard(x)); });
+    }
+    h.push('</div>');
+    el['step-detail'].innerHTML = h.join('');
+  }
+  el['report-flow'].addEventListener('click', function (e) {
     var b = e.target.closest('[data-view-frame]'); if (!b) return;
+    el.video.pause();
     S.viewFrame = b.dataset.viewFrame;
     seekTo(S.frames[S.viewFrame].t);
-    buildReportFrames(); draw();
+    buildFlow(); renderStepDetail(); draw();
   });
+  // 타임라인에 구간 위치를 표시한다
+  function buildSeekMarks() {
+    if (!S.duration) { el.seekmarks.innerHTML = ''; return; }
+    el.seekmarks.innerHTML = D.FRAMES.filter(function (f) { return isReady(f.id); })
+      .map(function (f) {
+        var fl = faultsOfStep(f.id);
+        return '<i class="' + (fl.length ? 'bad' : '') + '" style="left:' +
+          (S.frames[f.id].t / S.duration * 100).toFixed(2) + '%" title="' + esc(f.label) + '"></i>';
+      }).join('');
+  }
 
   /* ── 집중 교정 ────────────────────────────────────────────────
    * 문제를 한꺼번에 다 고칠 수는 없다. 하나만 정해 놓고, 그 문제가 몇 회 연속
@@ -965,20 +1037,29 @@
     });
     h.push('</div></div></details>');
 
+    h.push('<p class="hint" style="margin:18px 0 8px">아래는 <b>전체 요약</b>입니다. ' +
+      '구간별로 보려면 위 스윙 흐름에서 단계를 누르세요.</p>');
+
     if (!R.faults.length) {
       h.push('<div class="okbox"><b>이 각도에서는 기준을 벗어난 항목이 없습니다 ⛳</b>' +
         '<span>잘 친다는 뜻은 아니고, 이 앱이 재는 항목 안에서는 걸린 게 없다는 뜻입니다. 반대쪽 각도(' + esc(D.VIEWS[R.view === 'dtl' ? 'fo' : 'dtl'].label) + ')로도 한 번 찍어보세요. ' +
         '한 각도에서 안 보이는 문제가 다른 각도에서 드러납니다.</span></div>');
     } else {
-      // 구간별로 묶어서 출력
-      F.PHASES.forEach(function (ph) {
-        var list = R.faults.filter(function (f) { return F.FAULTS[f.faultId].phase === ph.id; });
+      // 어느 단계에 무엇이 잡혔는지 한눈에. 누르면 그 단계로 이동한다.
+      h.push('<div class="sumlist">');
+      D.FRAMES.forEach(function (fr) {
+        var list = R.faults.filter(function (f) {
+          return D.FAULT_STEP[F.FAULTS[f.faultId].phase] === fr.id;
+        });
         if (!list.length) return;
-        h.push('<div class="phase"><div class="phase-h">' + ph.emoji + ' ' + esc(ph.label) +
-          ' <span class="rng">' + esc(ph.range) + '</span></div>');
-        list.forEach(function (f) { h.push(faultCard(f)); });
-        h.push('</div>');
+        h.push('<button type="button" class="sumrow" data-goto="' + fr.id + '">' +
+          '<span class="em">' + fr.emoji + '</span><span class="tt"><b>' + esc(fr.label) + '</b>' +
+          list.map(function (f) {
+            return '<span class="li s' + f.sev + '">' + esc(F.FAULTS[f.faultId].title) +
+              ' <em>' + ['', '경미', '주의', '심각'][f.sev] + '</em></span>';
+          }).join('') + '</span><span class="arrow">›</span></button>');
       });
+      h.push('</div>');
     }
 
     el.report.innerHTML = h.join('');
@@ -1028,9 +1109,22 @@
     return h.join('');
   }
 
+  el['step-detail'].addEventListener('click', function (e) {
+    var head = e.target.closest('.card-h'); if (!head) return;
+    head.parentNode.classList.toggle('open');
+  });
   el.report.addEventListener('click', function (e) {
     if (e.target.id === 'rep-shape') { showShape(); return; }
     if (e.target.id === 'rep-fix') { show('mark'); return; }
+    var go = e.target.closest('[data-goto]');
+    if (go) {
+      el.video.pause();
+      S.viewFrame = go.dataset.goto;
+      seekTo(S.frames[S.viewFrame].t);
+      buildFlow(); renderStepDetail(); draw();
+      el['report-flow'].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     var fbtn = e.target.closest('[data-focus]');
     if (fbtn) {
       setFocus(fbtn.dataset.focus || null);

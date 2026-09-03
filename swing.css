@@ -496,3 +496,73 @@ main{padding:18px 16px 0}
 .autonote b{display:block;font-size:14.5px;margin-bottom:4px}
 .autonote p{margin:0 0 10px;font-size:13px;line-height:1.7;color:var(--dim);word-break:keep-all}
 .autonote p b{display:inline;color:var(--tx)}
+
+/* ── 스윙 흐름 (골프픽스식 단계 띠) ────────────────────
+   영상 바로 아래에 8단계를 늘어놓고, 재생하는 동안 지금 지나는 구간에 불이
+   들어온다. 문제가 잡힌 단계는 개수와 심각도를 배지로 함께 보여준다. */
+.flowhead{display:flex;align-items:baseline;gap:8px;margin:16px 0 8px;padding:0 2px}
+.flowhead span{font-size:14px;font-weight:800;color:var(--teal)}
+.flowhead em{font-style:normal;font-size:11.5px;color:var(--dim);margin-left:auto}
+.flow{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 10px;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch}
+.flow::-webkit-scrollbar{display:none}
+.step{position:relative;flex:0 0 auto;width:78px;border:1.5px solid var(--line);
+  border-radius:14px;background:var(--card);padding:11px 6px 9px;cursor:pointer;
+  font-family:inherit;text-align:center;transition:border-color .15s,box-shadow .15s,transform .15s}
+.step .em{display:block;font-size:21px;line-height:1.2}
+.step .nm{display:block;font-size:12px;font-weight:800;color:var(--tx);margin-top:3px;
+  white-space:nowrap}
+.step .tt{display:block;font-size:10.5px;font-weight:700;color:var(--dim);
+  font-variant-numeric:tabular-nums;margin-top:1px}
+.step .fb{position:absolute;top:-6px;right:-4px;min-width:19px;height:19px;line-height:19px;
+  border-radius:999px;font-size:11px;font-weight:800;color:#fff;padding:0 5px}
+.step .fb.ok{background:var(--ok)}
+.step .fb.s1{background:var(--ok)} .step .fb.s2{background:var(--warn)} .step .fb.s3{background:var(--bad)}
+.step.bad.s2{border-color:var(--warn)} .step.bad.s3{border-color:var(--bad)}
+.step.sel{border-color:var(--teal);background:rgba(31,92,80,.07);
+  box-shadow:0 0 0 3px rgba(31,92,80,.1)}
+/* 재생 중 지금 지나는 구간 — 불이 들어온다 */
+.step.live{transform:translateY(-2px)}
+.step.live::after{content:'';position:absolute;inset:-3px;border-radius:16px;
+  border:2px solid var(--coral);box-shadow:0 0 12px rgba(255,145,102,.55);
+  animation:lit 1s ease-in-out infinite}
+@keyframes lit{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* 타임라인 위 구간 표시 */
+.seekwrap{position:relative;padding-bottom:9px}
+.seekmarks{position:absolute;left:0;right:0;bottom:0;height:7px;pointer-events:none}
+.seekmarks i{position:absolute;top:0;width:2px;height:7px;margin-left:-1px;border-radius:1px;
+  background:var(--teal);opacity:.5}
+.seekmarks i.bad{background:var(--bad);opacity:.85;width:3px}
+
+/* 단계별 진단 */
+.sd{background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:14px 15px;margin-bottom:16px}
+.sd-h{display:flex;align-items:center;gap:11px;margin-bottom:10px}
+.sd-h .em{font-size:26px;line-height:1}
+.sd-h b{display:block;font-size:16.5px;font-weight:800}
+.sd-h span{display:block;font-size:12.5px;color:var(--dim);word-break:keep-all;line-height:1.5}
+.sd-h em{margin-left:auto;font-style:normal;font-size:12px;font-weight:800;color:var(--teal);
+  font-variant-numeric:tabular-nums;flex:0 0 auto}
+.sd-ok{margin:0;font-size:13.5px;color:var(--ok);font-weight:700;
+  background:rgba(77,212,172,.14);border-radius:11px;padding:12px 14px}
+.sd .card{margin-bottom:8px}
+.sd .card:last-child{margin-bottom:0}
+
+/* 전체 요약 — 어느 단계에 뭐가 잡혔는지 한 줄씩 */
+.sumlist{display:flex;flex-direction:column;gap:7px}
+.sumrow{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;cursor:pointer;
+  font-family:inherit;background:var(--card);border:1px solid var(--line);border-radius:13px;
+  padding:12px 14px}
+.sumrow .em{font-size:20px;line-height:1.2;flex:0 0 auto}
+.sumrow .tt{flex:1;min-width:0}
+.sumrow .tt b{display:block;font-size:13.5px;font-weight:800;margin-bottom:3px}
+.sumrow .li{display:block;font-size:12.5px;color:var(--dim);word-break:keep-all;line-height:1.55}
+.sumrow .li em{font-style:normal;font-weight:800;font-size:11px;padding:1px 6px;border-radius:999px;
+  color:#fff;margin-left:3px}
+.sumrow .li.s1 em{background:var(--ok)} .sumrow .li.s2 em{background:var(--warn)}
+.sumrow .li.s3 em{background:var(--bad)}
+.sumrow .arrow{color:var(--dim);font-size:14px;flex:0 0 auto;align-self:center}
+
+.mini.play{min-width:88px;font-weight:800}
+.seg.tiny button{padding:6px 9px}

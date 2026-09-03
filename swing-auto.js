@@ -151,9 +151,24 @@
     var p2 = crossHip(addr, top, false);        // 올라가며 골반 위로 올라선 순간
     var p6 = crossHip(top + 1, imp, true);      // 내려오며 골반 아래로 내려온 순간
 
+    // 백스윙(P3)·팔로스루(P9)는 "앞팔이 지면과 나란한" 순간이다. 팔이 안 보여도
+    // 그 무렵 손은 어깨 높이를 지난다. 그 교차점으로 잡는다.
+    var shY = track.map(function (f) { return mid(f.lm[L.shL], f.lm[L.shR]).y; });
+    function crossSh(lo, hi) {
+      for (var i4 = lo; i4 <= hi; i4++) {
+        if (i4 < 0 || i4 >= hand.length) break;
+        if (hand[i4].y <= shY[i4]) return i4;
+      }
+      return null;
+    }
+    var p3 = crossSh(p2 != null ? p2 : addr, top);
+    var p9 = crossSh(imp + 1, fin);
+
     var out = { P1: addr, P4: top, P7: imp, P10: fin };
     if (p2 != null && p2 > addr && p2 < top) out.P2 = p2;
+    if (p3 != null && p3 > (out.P2 != null ? out.P2 : addr) && p3 < top) out.P3 = p3;
     if (p6 != null && p6 > top && p6 < imp) out.P6 = p6;
+    if (p9 != null && p9 > imp && p9 < fin) out.P9 = p9;
 
     /* 찾은 구간이 정말 "스윙 모양"인지 확인한다.
      * 순서만 맞으면 걸어가는 장면에서도 아무 구간이나 나온다. 손이 실제로

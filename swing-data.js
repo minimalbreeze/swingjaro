@@ -76,14 +76,41 @@
   /* ── 키프레임(P 시스템) ────────────────────────────────────────────────
    * required=true 인 프레임만 있으면 분석이 돌아간다. 나머지는 있으면 더 정밀해진다.
    */
+  /* 스윙 8단계. 코칭에서 쓰는 표준 구분을 그대로 따른다.
+   * required 인 네 곳만 있으면 분석이 돌아가고, 나머지는 있으면 더 정밀해진다.
+   * step 은 이 단계에서 드러나는 문제를 묶는 열쇠다(swing-faults 의 phase 와 연결). */
   var FRAMES = [
-    { id:'P1',  label:'어드레스',   emoji:'🧍', required:true,  cue:'셋업 완료, 클럽이 볼 뒤에 놓인 순간' },
-    { id:'P2',  label:'테이크백',   emoji:'↗️', required:false, cue:'샤프트가 지면과 나란해진 순간(백스윙)' },
-    { id:'P4',  label:'톱',         emoji:'⛰️', required:true,  cue:'백스윙이 멈추고 방향이 바뀌기 직전' },
-    { id:'P6',  label:'다운스윙',   emoji:'↘️', required:false, cue:'샤프트가 다시 지면과 나란해진 순간(다운)' },
-    { id:'P7',  label:'임팩트',     emoji:'💥', required:true,  cue:'클럽페이스가 볼에 닿는 프레임' },
-    { id:'P10', label:'피니시',     emoji:'🏁', required:true,  cue:'완전히 돌아 멈춘 마무리 자세' }
+    { id:'P1',  label:'어드레스',   emoji:'🧍', required:true,  step:'address',
+      cue:'셋업 완료, 클럽이 볼 뒤에 놓인 순간',
+      what:'스윙의 출발점. 여기가 틀어지면 뒤가 전부 보상 동작이 된다.' },
+    { id:'P2',  label:'테이크어웨이', emoji:'↗️', required:false, step:'takeaway',
+      cue:'샤프트가 지면과 나란해진 순간(백스윙)',
+      what:'클럽이 몸 안쪽으로 감기는지, 밖으로 들리는지가 여기서 갈린다.' },
+    { id:'P3',  label:'백스윙',     emoji:'🔼', required:false, step:'backswing',
+      cue:'앞쪽 팔이 지면과 나란해진 순간',
+      what:'회전으로 올라가는지 팔로 들어 올리는지가 보인다.' },
+    { id:'P4',  label:'톱',         emoji:'⛰️', required:true,  step:'top',
+      cue:'백스윙이 멈추고 방향이 바뀌기 직전',
+      what:'저장한 힘의 크기와 클럽의 방향이 정해지는 지점.' },
+    { id:'P6',  label:'다운스윙',   emoji:'↘️', required:false, step:'downswing',
+      cue:'샤프트가 다시 지면과 나란해진 순간(다운)',
+      what:'오버 더 톱인지 아닌지가 결정되는 가장 중요한 구간.' },
+    { id:'P7',  label:'임팩트',     emoji:'💥', required:true,  step:'impact',
+      cue:'클럽페이스가 볼에 닿는 프레임',
+      what:'모든 것이 결정되는 1/1000초. 자세가 무너지면 여기서 드러난다.' },
+    { id:'P9',  label:'팔로스루',   emoji:'➡️', required:false, step:'follow',
+      cue:'임팩트 뒤 앞쪽 팔이 다시 지면과 나란해진 순간',
+      what:'릴리즈가 이어지는지, 붙잡는지가 보인다.' },
+    { id:'P10', label:'피니시',     emoji:'🏁', required:true,  step:'finish',
+      cue:'완전히 돌아 멈춘 마무리 자세',
+      what:'끝까지 회전했는지, 균형이 남아 있는지.' }
   ];
+
+  // 문제(phase) → 이 단계에서 보여준다
+  var FAULT_STEP = {
+    address:'P1', backswing:'P4', transition:'P4',
+    downswing:'P6', impact:'P7', follow:'P10'
+  };
 
   /* ── 구질 ────────────────────────────────────────────────────────────────
    * start : 출발 방향(-좌 / 0직 / +우), curve : 휘는 방향(-좌 / 0직 / +우). 오른손잡이 기준.
@@ -117,7 +144,7 @@
 
   global.SwingData = {
     CLUBS: CLUBS, CLUB_ORDER: CLUB_ORDER,
-    VIEWS: VIEWS, FRAMES: FRAMES,
+    VIEWS: VIEWS, FRAMES: FRAMES, FAULT_STEP: FAULT_STEP,
     FLIGHTS: FLIGHTS, TRAJECTORIES: TRAJECTORIES, CONTACTS: CONTACTS
   };
 })(window);
