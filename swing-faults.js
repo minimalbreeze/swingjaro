@@ -577,5 +577,31 @@
     }
   };
 
-  global.SwingFaults = { PHASES: PHASES, FAULTS: FAULTS };
+  /* 교정 난이도 — 고치는 데 드는 품. 쉬움은 셋업만 바꾸면 되는 것,
+   * 어려움은 몸의 움직임 순서를 새로 익혀야 하는 것이다. */
+  var DIFFICULTY = {
+    setup_posture:'쉬움', setup_tilt:'쉬움',
+    overswing:'쉬움', flat_top:'보통', steep_top:'보통',
+    head_move:'보통', short_turn:'보통', arm_collapse:'보통',
+    hanging_back:'보통', poor_finish:'쉬움', excessive_lean:'보통',
+    sway:'보통', reverse_pivot:'어려움', slide:'어려움',
+    casting:'어려움', early_extension:'어려움', loss_of_posture:'어려움',
+    over_the_top:'어려움', under_plane:'어려움'
+  };
+
+  /* 문제가 드러나는 몸의 부위. 영상 위에 빨간 고리로 짚어 준다. */
+  var HOTSPOT = {
+    setup_posture:['shoulder','hip'], setup_tilt:['leadShoulder','trailShoulder'],
+    steep_top:['clubhead','hands'], flat_top:['clubhead','hands'],
+    overswing:['clubhead','hands'], arm_collapse:['hands'],
+    over_the_top:['hands'], under_plane:['hands'],
+    early_extension:['hip'], loss_of_posture:['shoulder','hip'],
+    sway:['trailHip'], slide:['leadHip'], reverse_pivot:['leadShoulder','trailShoulder'],
+    hanging_back:['leadHip','trailHip'], head_move:['head'],
+    short_turn:['leadShoulder','trailShoulder'], casting:['hands'],
+    excessive_lean:['hands'], poor_finish:['leadHip','trailHip']
+  };
+
+  global.SwingFaults = { PHASES: PHASES, FAULTS: FAULTS,
+    DIFFICULTY: DIFFICULTY, HOTSPOT: HOTSPOT };
 })(window);

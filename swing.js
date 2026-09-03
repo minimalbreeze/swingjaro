@@ -697,7 +697,35 @@
     ctx.clearRect(0, 0, cw, ch);
     if (S.report && S.report.shapes) drawShapes(S.report.shapes);
     drawSkeleton();
+    drawHotspots();
     updateBadge();
+  }
+
+  /* 문제 부위 강조 — 어느 관절이 문제인지 말로만 하면 안 와닿는다.
+   * 지금 보고 있는 단계에서 잡힌 문제의 부위에 빨간 고리를 그린다. */
+  function drawHotspots() {
+    if (!S.report || !S.viewFrame) return;
+    var fr = S.frames[S.viewFrame];
+    if (!fr) return;
+    var fl = faultsOfStep(S.viewFrame);
+    if (!fl.length) return;
+    var seen = {};
+    fl.forEach(function (f) {
+      (F.HOTSPOT[f.faultId] || []).forEach(function (j) {
+        if (!fr.marks[j] || seen[j]) return;
+        seen[j] = true;
+        var p = toPx(fr.marks[j]);
+        var r = Math.max(13, Math.min(el.canvas.clientWidth, el.canvas.clientHeight) * 0.045);
+        ctx.save();
+        ctx.strokeStyle = f.sev >= 3 ? '#e2574c' : f.sev === 2 ? '#e79a2b' : '#2f9e75';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 0.28;
+        ctx.lineWidth = 9;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      });
+    });
   }
 
   function updateBadge() {
@@ -815,9 +843,44 @@
     renderOutcomeForm();
     S.viewFrame = S.report.framesUsed.indexOf('P7') >= 0 ? 'P7' : S.report.framesUsed[0];
     buildFlow(); buildSeekMarks(); renderStepDetail();
+    captureThumbs(function () {
+      buildFlow();
+      seekTo(S.frames[S.viewFrame].t);
+      draw();
+    });
     seekTo(S.frames[S.viewFrame].t);
     show('report');
     requestAnimationFrame(function () { fitCanvas(); draw(); });
+  }
+
+  /* 각 단계의 실제 영상 장면을 작은 그림으로 떠 둔다.
+   * 이모지보다 자기 스윙을 알아보기 쉽다. 8번 되감아 캡처하므로 1초 안쪽이다. */
+  function captureThumbs(done) {
+    var ids = D.FRAMES.map(function (f) { return f.id; })
+      .filter(function (id) { return S.frames[id] && isReady(id); });
+    var cv = document.createElement('canvas'), cx = cv.getContext('2d');
+    var vw = el.video.videoWidth || 720, vh = el.video.videoHeight || 1280;
+    var W = 132, H = Math.round(W * vh / vw);
+    cv.width = W; cv.height = H;
+    var i = 0;
+    function step() {
+      if (i >= ids.length) { done && done(); return; }
+      var id = ids[i];
+      var fired = false;
+      function grab() {
+        if (fired) return; fired = true;
+        el.video.removeEventListener('seeked', grab);
+        try {
+          cx.drawImage(el.video, 0, 0, W, H);
+          S.frames[id].thumb = cv.toDataURL('image/jpeg', 0.62);
+        } catch (e) { /* 캡처 실패는 그림만 없을 뿐 분석과 무관하다 */ }
+        i++; setTimeout(step, 0);
+      }
+      el.video.addEventListener('seeked', grab);
+      try { el.video.currentTime = S.frames[id].t; } catch (e) { grab(); }
+      setTimeout(grab, 350);
+    }
+    step();
   }
 
   /* ── 스윙 흐름 ────────────────────────────────────────────────
@@ -844,13 +907,14 @@
     el['report-flow'].innerHTML = have.map(function (f) {
       var fl = faultsOfStep(f.id);
       var sev = fl.reduce(function (m, x) { return Math.max(m, x.sev); }, 0);
-      var badge = fl.length
-        ? '<span class="fb s' + sev + '">' + fl.length + '</span>'
-        : '<span class="fb ok">✓</span>';
+      var th = S.frames[f.id].thumb;
+      var shot = th ? '<img class="shot" src="' + th + '" alt="" />'
+                    : '<span class="shot em">' + f.emoji + '</span>';
       return '<button type="button" class="step' + (S.viewFrame === f.id ? ' sel' : '') +
-        (fl.length ? ' bad s' + sev : '') + '" data-view-frame="' + f.id + '">' +
-        badge + '<span class="em">' + f.emoji + '</span>' +
-        '<span class="nm">' + esc(f.label) + '</span>' +
+        (fl.length ? ' bad s' + sev : ' good') + '" data-view-frame="' + f.id + '">' +
+        '<span class="nm">' + esc(f.label) + '</span>' + shot +
+        '<span class="pf' + (fl.length ? ' fail s' + sev : ' pass') + '">' +
+        (fl.length ? 'Fail ' + fl.length : 'Pass') + '</span>' +
         '<span class="tt">' + S.frames[f.id].t.toFixed(2) + 's</span></button>';
     }).join('');
     var lit = el['report-flow'].querySelector('.step.sel');
@@ -911,6 +975,14 @@
     } catch (e) { /* 무시 */ }
   }
   // 집중 문제가 최근 몇 회 연속으로 안 잡혔는지. 같은 각도의 분석만 센다.
+  function freqOf(faultId) {
+    var rows = readHist().filter(function (r) { return r.view === S.view; }).slice(0, 14);
+    if (rows.length < 3) return null;   // 표본이 적으면 비율이 의미 없다
+    var hit = rows.filter(function (r) {
+      return (r.faults || []).some(function (f) { return f.id === faultId; });
+    }).length;
+    return Math.round(hit / rows.length * 1000) / 10;
+  }
   function focusStreak() {
     if (!S.focus) return null;
     var rows = readHist().filter(function (r) {
@@ -991,6 +1063,39 @@
       h.push('<div class="shape-verdict ' + cls + ' inline"><div class="sv-h">🎯 내 목표 구질: ' +
         sh.emoji + ' ' + esc(sh.label) + '</div><p>' + msg +
         '</p><button type="button" class="mini" id="rep-shape">구질 가이드 보기 ›</button></div>');
+    }
+
+    /* 대표 진단 — 가장 심각한 문제 하나를 앞에 세운다.
+     * 여러 개를 한꺼번에 늘어놓으면 무엇부터 손댈지 알 수 없다. */
+    var top1 = R.faults[0];
+    if (top1) {
+      var d1 = F.FAULTS[top1.faultId];
+      var stepOf = D.FAULT_STEP[d1.phase];
+      var stepName = '';
+      D.FRAMES.forEach(function (f) { if (f.id === stepOf) stepName = f.emoji + ' ' + f.label; });
+      var verdict = top1.sev >= 3 ? '먼저 고칠 것' : top1.sev === 2 ? '더 노력해요' : '거의 다 왔어요';
+      h.push('<div class="lead sev' + top1.sev + '">' +
+        '<div class="lead-k">대표 진단</div>' +
+        '<div class="lead-t">' + d1.emoji + ' ' + esc(d1.title) + '</div>' +
+        '<span class="lead-v">' + verdict + '</span>' +
+        '<div class="lead-m">' + esc(stepName) + ' 구간 · ' +
+          esc(F.DIFFICULTY[top1.faultId] || '보통') + ' 난이도' +
+          (freqOf(top1.faultId) != null ? ' · 최근 발생 ' + freqOf(top1.faultId) + '%' : '') +
+        '</div>' +
+        (R.faults.length > 1
+          ? '<button type="button" class="lead-more" data-goto="' + stepOf + '">+' +
+            (R.faults.length - 1) + '개의 문제점이 더 발견되었어요 ›</button>'
+          : '') +
+        '</div>');
+
+      if (!S.focus || S.focus.faultId !== top1.faultId) {
+        h.push('<div class="practice"><b>집중연습으로 해결해 보세요</b>' +
+          '<div class="practice-c"><b>' + esc(d1.title) + '</b>' +
+          '<p>' + esc(d1.symptom.slice(0, 52)) + '…</p>' +
+          '<span>교정 난이도 <em>' + esc(F.DIFFICULTY[top1.faultId] || '보통') + '</em></span></div>' +
+          '<button type="button" class="cta" data-focus="' + top1.faultId +
+          '">🎯 이걸로 집중연습 시작</button></div>');
+      }
     }
 
     if (R.auto) {
