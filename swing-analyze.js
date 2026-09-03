@@ -134,24 +134,24 @@
     var rSpine = Math.hypot((R1.hip.x - R1.shoulder.x) * aspect, R1.hip.y - R1.shoulder.y) || 0.2;
     shapes.push({ type: 'band', id: 'planeBand', apex: rBall, a: R1.hands, b: R1.shoulder,
       extend: 2.4, fill: 'rgba(0,230,180,0.10)',
-      steps: ['P1','P2','P3','P4','P6'] });
+      steps: ['P2','P3','P4','P6'] });
     shapes.push({ type: 'line', id: 'shaftPlane', from: rBall, to: R1.hands, extend: 2.6,
       color: '#00e6a0', width: 2.6, label: '샤프트 플레인',
       steps: ['P1','P2','P3','P4','P6'] });
     shapes.push({ type: 'line', id: 'shoulderPlane', from: rBall, to: R1.shoulder, extend: 2.0,
       color: '#00e6a0', width: 2.2, dash: [10, 8], label: '어깨 플레인',
-      steps: ['P4','P6'] });
+      steps: ['P4','P6'], only: 'all' });
     shapes.push({ type: 'line', id: 'spineP1', from: R1.hip, to: R1.shoulder, extend: 1.35,
       color: '#ffa63d', width: 2.6, label: '척추선', steps: ['P1','P7'] });
     shapes.push({ type: 'vline', id: 'buttLine', x: R1.hip.x, color: '#ff5fa2', width: 2.2,
       dash: [8, 7], label: '엉덩이 기준선', steps: ['P7'] });
     shapes.push({ type: 'circle', id: 'headZone', center: R1.head, r: rSpine * 0.22 * k,
       color: '#ffd400', width: 2.4, dash: [7, 6], label: '머리 허용 범위',
-      steps: ['P4','P7'] });
+      steps: ['P4'] });
     if (R1.ball) shapes.push({ type: 'dot', id: 'ball', at: R1.ball, r: 4.5, color: '#ffffff',
       label: '볼', steps: ['P1','P7'] });
-    shapes.push({ type: 'trace', id: 'handPath', points: ['hands'], color: '#ff5fa2', width: 2.4,
-      label: '손 궤적', steps: ['P10'] });
+    shapes.push({ type: 'trace', id: 'handPath', points: ['hands'], color: 'rgba(255,95,162,.85)',
+      width: 1.8, label: '손 궤적', steps: ['P10'], only: 'all' });
     return { metrics: m, shapes: shapes };
   }
 
@@ -205,23 +205,32 @@
     var rHipC = { x: (R1.leadHip.x + R1.trailHip.x) / 2, y: (R1.leadHip.y + R1.trailHip.y) / 2 };
     var rShC = { x: (R1.leadShoulder.x + R1.trailShoulder.x) / 2, y: (R1.leadShoulder.y + R1.trailShoulder.y) / 2 };
     shapes.push({ type: 'vline', id: 'headLine', x: R1.head.x, color: '#ffd400', width: 2.2,
-      dash: [8, 7], label: '머리 기준선', steps: ['P4','P7'] });
+      dash: [8, 7], label: '머리 기준선', steps: ['P4'] });
     shapes.push({ type: 'circle', id: 'headZone', center: R1.head, r: rShW * 0.24 * k,
-      color: '#ffd400', width: 2.4, dash: [7, 6], label: '머리 허용 범위', steps: ['P4','P7'] });
+      color: '#ffd400', width: 2.4, dash: [7, 6], label: '머리 허용 범위',
+      steps: ['P4'], only: 'all' });
     shapes.push({ type: 'vline', id: 'leadHipLine', x: R1.leadHip.x, color: '#4ab8ff', width: 2.2,
-      dash: [8, 7], label: '앞쪽 골반선', steps: ['P4','P6','P7','P10'] });
+      dash: [8, 7], label: '앞쪽 골반선', steps: ['P6','P7','P10'] });
     shapes.push({ type: 'vline', id: 'trailHipLine', x: R1.trailHip.x, color: '#2f7fe0', width: 2.2,
-      dash: [8, 7], label: '뒤쪽 골반선', steps: ['P2','P3','P4'] });
+      dash: [8, 7], label: '뒤쪽 골반선', steps: ['P2','P3'] });
     shapes.push({ type: 'line', id: 'shoulderLine', from: R1.trailShoulder, to: R1.leadShoulder,
       extend: 1.25, color: '#00e6a0', width: 2.6, label: '어깨 라인', steps: ['P1','P4'] });
     shapes.push({ type: 'line', id: 'spineFO', from: rHipC, to: rShC, extend: 1.3,
-      color: '#ffa63d', width: 2.6, label: '척추선', steps: ['P1','P4','P7'] });
+      color: '#ffa63d', width: 2.6, label: '척추선', steps: ['P1','P4','P7'], only: 'all' });
     if (R1.ball) shapes.push({ type: 'dot', id: 'ball', at: R1.ball, r: 4.5, color: '#ffffff',
       label: '볼', steps: ['P1','P7'] });
-    shapes.push({ type: 'trace', id: 'handPath', points: ['hands'], color: '#ff5fa2', width: 2.4,
-      label: '손 궤적', steps: ['P10'] });
-    shapes.push({ type: 'trace', id: 'clubPath', points: ['clubhead'], color: '#ff8a3d', width: 2.4,
-      label: '헤드 궤적', steps: ['P10'] });
+    shapes.push({ type: 'trace', id: 'handPath', points: ['hands'], color: 'rgba(255,95,162,.85)',
+      width: 1.8, label: '손 궤적', steps: ['P10'], only: 'all' });
+    /* 헤드 궤적은 클럽헤드를 여러 구간에서 알 때만 그린다. 자동 인식은
+     * 클럽을 보지 못해 어드레스 한 곳뿐인데, 그걸로 선을 그으면 점 하나가
+     * 엉뚱한 데 찍혀 "헤드 궤적"이라고 붙는다. 없느니만 못하다. */
+    var headPts = Object.keys(raw).filter(function (f) {
+      return raw[f] && raw[f].clubhead;
+    }).length;
+    if (headPts >= 3) {
+      shapes.push({ type: 'trace', id: 'clubPath', points: ['clubhead'], color: 'rgba(255,138,61,.85)',
+        width: 1.8, label: '헤드 궤적', steps: ['P10'], only: 'all' });
+    }
     return { metrics: m, shapes: shapes };
   }
 

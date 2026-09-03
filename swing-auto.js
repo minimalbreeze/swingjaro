@@ -23,7 +23,7 @@
   var TARGET_FPS = 24;       // 초당 이만큼 뽑아 본다
 
   function mid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
-  var L = { nose:0, earL:7, earR:8, shL:11, shR:12, wrL:15, wrR:16,
+  var L = { nose:0, earL:7, earR:8, shL:11, shR:12, elbL:13, elbR:14, wrL:15, wrR:16,
             hipL:23, hipR:24, kneeL:25, kneeR:26, ankL:27, ankR:28 };
 
   /* ── 1) 영상 훑기 ──────────────────────────────────────────── */
@@ -90,9 +90,80 @@
     return bi;
   }
 
-  function findPhases(track) {
+  /* ── 손목 관절 되살리기 ────────────────────────────────────────
+   * 어두운 스크린골프장에서는 손이 몸에 가려지거나 관절이 배경(골프백·기둥)
+   * 으로 튄다. 그 프레임을 그대로 쓰면 구간 인식도 손 궤적도 같이 망가진다.
+   *   1) 두 손목 중 잘 보이는 쪽을 쓴다
+   *   2) 팔이 닿을 수 없는 거리로 튄 프레임은 버린다
+   *   3) 버린 자리는 앞뒤 성한 값으로 메우고, 중앙값 5점으로 남은 튐을 누른다
+   * 종횡비를 넘겨받아야 세로 영상에서 가로 거리를 제대로 잰다.
+   */
+  function repairHands(track, aspect) {
+    var asp = aspect || 1, n = track.length, raw = [], i;
+    for (i = 0; i < n; i++) {
+      var lm = track[i].lm, a = lm[L.wrL], b = lm[L.wrR];
+      var va = !a ? 0 : (a.visibility == null ? 1 : a.visibility);
+      var vb = !b ? 0 : (b.visibility == null ? 1 : b.visibility);
+      var p = null;
+      if (va >= 0.5 && vb >= 0.5) p = mid(a, b);
+      else if (va >= vb && a) p = { x: a.x, y: a.y };
+      else if (b) p = { x: b.x, y: b.y };
+      if (p && Math.max(va, vb) < 0.35) p = null;
+      if (p) {
+        var shC = mid(lm[L.shL], lm[L.shR]), hipC = mid(lm[L.hipL], lm[L.hipR]);
+        var torso = Math.max(0.03, Math.abs(hipC.y - shC.y));
+        // 어깨에서 팔이 닿는 거리는 몸통 길이의 2.4배 안쪽이다. 그 밖은 팔이 아니다.
+        if (Math.hypot((p.x - shC.x) * asp, p.y - shC.y) > torso * 2.4) p = null;
+      }
+      raw.push(p);
+    }
+    // 빈 자리 메우기 — 앞뒤의 성한 값 사이를 잇는다
+    var good = [];
+    for (i = 0; i < n; i++) if (raw[i]) good.push(i);
+    if (good.length < Math.max(6, Math.round(n * 0.4))) return null;  // 너무 많이 놓쳤다
+    for (i = 0; i < n; i++) {
+      if (raw[i]) continue;
+      var lo = null, hi = null, j;
+      for (j = i - 1; j >= 0; j--) if (raw[j]) { lo = j; break; }
+      for (j = i + 1; j < n; j++) if (raw[j]) { hi = j; break; }
+      if (lo == null && hi == null) return null;
+      if (lo == null) raw[i] = { x: raw[hi].x, y: raw[hi].y };
+      else if (hi == null) raw[i] = { x: raw[lo].x, y: raw[lo].y };
+      else {
+        var u = (i - lo) / (hi - lo);
+        raw[i] = { x: raw[lo].x + (raw[hi].x - raw[lo].x) * u,
+                   y: raw[lo].y + (raw[hi].y - raw[lo].y) * u };
+      }
+    }
+    /* 중앙값 필터 — 튄 점을 눌러 없앤다. 창을 넓게 잡으면 다운스윙(0.25초)
+     * 자체가 뭉개져 구간 인식이 실패한다. 그래서 0.08초를 넘지 않게 잡는다. */
+    var dt = (track[n - 1].t - track[0].t) / Math.max(1, n - 1);
+    var half = Math.max(1, Math.min(2, Math.round(0.04 / Math.max(1e-3, dt))));
+    // 두 번 돌린다. 한 번으로는 연달아 두 프레임 튄 것을 못 잡는다.
+    var src = raw;
+    for (var pass = 0; pass < 2; pass++) {
+      var out = [];
+      for (i = 0; i < n; i++) {
+        var xs = [], ys = [];
+        for (var d = -half; d <= half; d++) {
+          var q = Math.min(n - 1, Math.max(0, i + d));
+          xs.push(src[q].x); ys.push(src[q].y);
+        }
+        xs.sort(asc); ys.sort(asc);
+        out.push({ x: xs[half], y: ys[half] });
+      }
+      src = out;
+    }
+    return src;
+  }
+  function asc(a, b) { return a - b; }
+
+  function findPhases(track, aspect) {
     if (track.length < 8) return null;
-    var hand = track.map(function (f) { return mid(f.lm[L.wrL], f.lm[L.wrR]); });
+    var hand = repairHands(track, aspect);
+    if (!hand) return null;
+    // 되살린 손 위치를 프레임에 붙여 둔다. 궤적·구간 좌표가 같은 값을 쓴다.
+    track.forEach(function (f, i) { f.hand = hand[i]; });
     var hipY = track.map(function (f) { return mid(f.lm[L.hipL], f.lm[L.hipR]).y; });
     // y 는 아래로 갈수록 크다. 높이는 뒤집어서 본다.
     // 표본 간격에 맞춰 다듬는 폭을 정한다. 흔들리는 영상에서 엉뚱한 봉우리를
@@ -204,7 +275,7 @@
       var f = res.track[res.idx[fid]], lm = f.lm, m = {};
       var shL = pt(lm, L.shL), shR = pt(lm, L.shR);
       var hipL = pt(lm, L.hipL), hipR = pt(lm, L.hipR);
-      var hands = mid(pt(lm, L.wrL), pt(lm, L.wrR));
+      var hands = f.hand ? { x: f.hand.x, y: f.hand.y } : mid(pt(lm, L.wrL), pt(lm, L.wrR));
       if (view === 'dtl') {
         m.head = mid(pt(lm, L.earL), pt(lm, L.earR));
         m.shoulder = mid(shL, shR);
@@ -230,9 +301,9 @@
     /* 볼 위치 추정 — 어드레스 프레임에서만.
      * 지면 높이(발목)와 손 위치를 알고, 클럽의 샤프트 각도를 알면 볼이 놓인
      * 자리를 삼각형으로 풀 수 있다. 추정이므로 화면에서 눌러 고칠 수 있게 한다. */
-    var a = res.track[res.idx.P1].lm;
+    var aF = res.track[res.idx.P1], a = aF.lm;
     var ground = Math.max(a[L.ankL].y, a[L.ankR].y);
-    var handsA = mid(pt(a, L.wrL), pt(a, L.wrR));
+    var handsA = aF.hand ? { x: aF.hand.x, y: aF.hand.y } : mid(pt(a, L.wrL), pt(a, L.wrR));
     var hipA = mid(pt(a, L.hipL), pt(a, L.hipR));
     var away = Math.sign((handsA.x - hipA.x) || 1);   // 몸에서 볼 쪽으로 가는 방향
     var dyPx = Math.max(0.02, ground - handsA.y);      // 손에서 지면까지(세로)
@@ -253,7 +324,7 @@
       var lm = f.lm, m = {};
       var shL = pt(lm, L.shL), shR = pt(lm, L.shR);
       var hipL = pt(lm, L.hipL), hipR = pt(lm, L.hipR);
-      var hands = mid(pt(lm, L.wrL), pt(lm, L.wrR));
+      var hands = f.hand ? { x: f.hand.x, y: f.hand.y } : mid(pt(lm, L.wrL), pt(lm, L.wrR));
       if (view === 'dtl') {
         m.head = mid(pt(lm, L.earL), pt(lm, L.earR));
         m.shoulder = mid(shL, shR);
@@ -269,7 +340,29 @@
         m.trailHip = leadIsLeft ? hipR : hipL;
         m.hands = hands;
       }
-      return { t: f.t, marks: m };
+      /* 화면에 그릴 전신 뼈대. 분석에 쓰는 marks 는 판정에 필요한 몇 점뿐이라
+       * 그대로 그리면 막대기 몇 개로 보여 조잡하다. 그리기용으로 팔·다리까지
+       * 따로 담아 둔다(판정에는 쓰지 않는다). */
+      var hd = mid(pt(lm, L.earL), pt(lm, L.earR));
+      var pose = {
+        head: hd, neck: mid(shL, shR),
+        shL: shL, shR: shR,
+        elbL: pt(lm, L.elbL), elbR: pt(lm, L.elbR),
+        wrL: pt(lm, L.wrL), wrR: pt(lm, L.wrR),
+        hipL: hipL, hipR: hipR,
+        knL: pt(lm, L.kneeL), knR: pt(lm, L.kneeR),
+        akL: pt(lm, L.ankL), akR: pt(lm, L.ankR)
+      };
+      if (f.hand) { pose.wrL = { x: f.hand.x, y: f.hand.y }; pose.wrR = pose.wrL; }
+
+      /* 손 궤적을 그릴 때 쓸 신뢰도. 어두운 스크린골프장에서는 손이 몸에
+       * 가리거나 배경(골프백 같은)으로 튀는 프레임이 섞인다. 그 프레임을
+       * 그대로 이으면 궤적이 낙서가 된다. */
+      var vL = lm[L.wrL] && lm[L.wrL].visibility, vR = lm[L.wrR] && lm[L.wrR].visibility;
+      var vis = Math.min(vL == null ? 1 : vL, vR == null ? 1 : vR);
+      var shC = mid(shL, shR), hipC = mid(hipL, hipR);
+      return { t: f.t, marks: m, pose: pose, vis: vis,
+               torso: Math.max(0.03, Math.abs(hipC.y - shC.y)) };
     });
   }
 

@@ -324,8 +324,12 @@
     var vw = el.video.videoWidth, vh = el.video.videoHeight;
     if (!vw || !vh) return;
     if (vw / vh > 1.05) {
+      /* 가로 영상은 4:3 으로 살짝만 잘라 낸다.
+       * 3:4 로 깊게 자르면 화면에서는 커 보이지만, 720p 영상의 좁은 조각을
+       * 폰 해상도로 늘리는 셈이라 눈에 띄게 뭉개진다(원본픽셀/화면픽셀 0.5).
+       * 4:3 이면 거의 원본 해상도 그대로 나온다. 더 크게 보고 싶으면 🔍 를 쓴다. */
       S.fit = 'cover';
-      el.stage.style.aspectRatio = '3 / 4';
+      el.stage.style.aspectRatio = '4 / 3';
     } else {
       S.fit = 'contain';
       el.stage.style.aspectRatio = vw + ' / ' + vh;
@@ -384,11 +388,11 @@
           throw new Error('영상에서 사람을 거의 찾지 못했습니다.');
         }
         autoMsg('스윙 구간을 찾는 중…', null, 0.9);
-        var res = window.SwingAuto.findPhases(track);
-        if (!res) throw new Error('스윙의 흐름(어드레스→톱→임팩트→피니시)을 찾지 못했습니다.');
-
         var aspect = (el.video.videoWidth && el.video.videoHeight)
           ? el.video.videoWidth / el.video.videoHeight : 1;
+        var res = window.SwingAuto.findPhases(track, aspect);
+        if (!res) throw new Error('스윙의 흐름(어드레스→톱→임팩트→피니시)을 찾지 못했습니다.');
+
         var built = window.SwingAuto.buildMarks(res, S.view, S.handed, D.CLUBS[S.club], aspect);
 
         // 찾은 구간을 그대로 우리 상태에 넣는다. 이제부터는 손으로 고칠 수도 있다.
@@ -667,12 +671,12 @@
   var dragging = null;
 
   function fitCanvas() {
-    // getBoundingClientRect 는 확대(transform)가 반영된 크기를 준다. 그 값으로
-    // 캔버스를 잡으면 부모가 한 번 더 확대해 두 배로 커지고 선이 영상과 어긋난다.
-    // 확대와 무관한 배치 크기(clientWidth/Height)를 써야 한다.
+    // 배치 크기(clientWidth/Height)를 쓴다. 확대는 안쪽 화면을 실제로 키우는
+    // 방식이라 이 값이 이미 확대된 크기다.
     var w = el.video.clientWidth, h = el.video.clientHeight;
     if (!w || !h) return;
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // 선은 폰 해상도 그대로 그린다. 2 로 묶어 두면 요즘 폰(3배)에서 계단이 보인다.
+    var dpr = Math.min(window.devicePixelRatio || 1, 3);
     el.canvas.width = Math.round(w * dpr);
     el.canvas.height = Math.round(h * dpr);
     el.canvas.style.width = w + 'px';
@@ -684,8 +688,8 @@
   el.video.addEventListener('loadeddata', fitCanvas);
 
   // 정규화 좌표(0~1) ↔ 캔버스 픽셀. 영상이 letterbox 되어도 맞도록 표시 영역 기준으로 계산한다.
-  function box() {
-    var cw = el.canvas.clientWidth, ch = el.canvas.clientHeight;
+  function box() { return boxOf(el.canvas.clientWidth, el.canvas.clientHeight); }
+  function boxOf(cw, ch) {
     var vw = el.video.videoWidth || 16, vh = el.video.videoHeight || 9;
     // 채움(cover)은 큰 쪽에 맞춰 넘치게, 맞춤(contain)은 작은 쪽에 맞춰 여백을 둔다.
     // 여기를 안 맞추면 잘라낸 만큼 선이 통째로 어긋난다.
@@ -748,7 +752,10 @@
       // 기본은 "지금 보고 있는 단계에서 의미가 있는 선"만 그린다.
       var vf = S.viewFrame;
       drawShapes(S.report.shapes.filter(function (sh) {
-        if (S.overlay === 'all' || !sh.steps) return true;
+        if (S.overlay === 'all') return true;
+        // 근거로 꼭 필요하진 않은 선(궤적·겹치는 선)은 "전부 보기"에서만 그린다.
+        if (sh.only === 'all') return false;
+        if (!sh.steps) return true;
         return vf && sh.steps.indexOf(vf) >= 0;
       }));
     }
@@ -759,32 +766,6 @@
 
   /* 문제 부위 강조 — 어느 관절이 문제인지 말로만 하면 안 와닿는다.
    * 지금 보고 있는 단계에서 잡힌 문제의 부위에 빨간 고리를 그린다. */
-  function drawHotspots() {
-    if (!S.report || !S.viewFrame) return;
-    var fr = S.frames[S.viewFrame];
-    if (!fr) return;
-    var fl = faultsOfStep(S.viewFrame);
-    if (!fl.length) return;
-    var seen = {};
-    fl.forEach(function (f) {
-      (F.HOTSPOT[f.faultId] || []).forEach(function (j) {
-        if (!fr.marks[j] || seen[j]) return;
-        seen[j] = true;
-        var p = toPx(fr.marks[j]);
-        var zk3 = zoomK();
-        var r = Math.max(13, Math.min(el.canvas.clientWidth, el.canvas.clientHeight) * 0.045) / zk3;
-        ctx.save();
-        ctx.strokeStyle = f.sev >= 3 ? '#e2574c' : f.sev === 2 ? '#e79a2b' : '#2f9e75';
-        ctx.lineWidth = 3 / zk3;
-        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
-        ctx.globalAlpha = 0.28;
-        ctx.lineWidth = 8 / zk3;
-        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
-        ctx.restore();
-      });
-    });
-  }
-
   function updateBadge() {
     if (S.curFrame && S.markQueue.length) {
       var j = S.markQueue[0];
@@ -802,7 +783,6 @@
     }
   }
 
-  // 지금 재생 위치에 가장 가까운 관절 한 벌을 꺼낸다
   function marksAt(t) {
     if (!S.track || !S.track.length) return null;
     var lo = 0, hi = S.track.length - 1;
@@ -813,34 +793,166 @@
     if (lo > 0 && Math.abs(S.track[lo - 1].t - t) < Math.abs(S.track[lo].t - t)) lo--;
     return S.track[lo].marks;
   }
+
+  /* 지금 시각의 전신 뼈대(그리기 전용). 없으면 null. */
+  function poseAt(t) {
+    if (!S.track || !S.track.length) return null;
+    var lo = 0, hi = S.track.length - 1;
+    while (lo < hi) {
+      var m = (lo + hi) >> 1;
+      if (S.track[m].t < t) lo = m + 1; else hi = m;
+    }
+    if (lo > 0 && Math.abs(S.track[lo - 1].t - t) < Math.abs(S.track[lo].t - t)) lo--;
+    return S.track[lo].pose || null;
+  }
+
+  var BONES = [
+    ['head','neck'], ['shL','shR'], ['hipL','hipR'],
+    ['shL','hipL'], ['shR','hipR'],
+    ['shL','elbL'], ['elbL','wrL'], ['shR','elbR'], ['elbR','wrR'],
+    ['hipL','knL'], ['knL','akL'], ['hipR','knR'], ['knR','akR']
+  ];
+  /* 문제 부위(관절 이름) → 빨갛게 칠할 뼈. 골프픽스처럼 문제가 있는 부위만
+   * 붉게 보여 주면 어디를 봐야 하는지 한눈에 들어온다. */
+  var HOT_BONE = {
+    head: ['head-neck'], shoulder: ['shL-shR','shL-hipL','shR-hipR'],
+    leadShoulder: ['shL-shR'], trailShoulder: ['shL-shR'],
+    hip: ['hipL-hipR','shL-hipL','shR-hipR'],
+    leadHip: ['hipL-hipR'], trailHip: ['hipL-hipR'],
+    hands: ['shL-elbL','elbL-wrL','shR-elbR','elbR-wrR'],
+    clubhead: ['elbL-wrL','elbR-wrR']
+  };
+
+  function drawHotspots() {
+    if (!S.report || !S.viewFrame) return;
+    var fr = S.frames[S.viewFrame];
+    if (!fr) return;
+    var fl = faultsOfStep(S.viewFrame);
+    if (!fl.length) return;
+    /* 고리는 하나만 그린다. 문제 부위마다 다 두르면 화면이 고리로 뒤덮인다.
+     * 뼈대가 이미 색으로 문제 부위를 알려주므로, 여기서는 "가장 먼저 볼 곳"
+     * 한 군데만 짚어 준다(골프픽스도 한 곳만 표시한다). */
+    var top = fl.slice().sort(function (a, b) { return (b.sev || 0) - (a.sev || 0); })[0];
+    var pose = (!S.curFrame && S.track) ? poseAt(el.video.currentTime || 0) : null;
+    var names = F.HOTSPOT[top.faultId] || [];
+    var p = null;
+    for (var i = 0; i < names.length && !p; i++) {
+      var n = names[i];
+      // 분석에 쓴 좌표가 먼저다(왼손잡이의 앞/뒤 구분이 이미 반영돼 있다).
+      if (fr.marks[n]) p = toPx(fr.marks[n]);
+      else if (pose && POSE_OF[n] && pose[POSE_OF[n]]) p = toPx(pose[POSE_OF[n]]);
+    }
+    if (!p) return;
+    var r = Math.max(14, Math.min(el.canvas.clientWidth, el.canvas.clientHeight) * 0.048);
+    ctx.save();
+    ctx.strokeStyle = sevColor(top.sev);
+    ctx.lineWidth = 3.2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 0.25; ctx.lineWidth = 9;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+  /* 분석용 관절 이름 → 그리기용 뼈대의 어느 점인가 */
+  var POSE_OF = { head:'head', shoulder:'neck', hip:'hipL', knee:'knL',
+    hands:'wrL', clubhead:'wrL', leadShoulder:'shL', trailShoulder:'shR',
+    leadHip:'hipL', trailHip:'hipR' };
+
   function drawSkeleton() {
     var fid = S.curFrame || S.viewFrame;
-    var marks = null;
-    // 구간을 찍는 중이 아니면, 지금 보고 있는 프레임의 관절을 쓴다.
-    // 재생하면 뼈대가 영상을 따라 움직인다.
-    if (!S.curFrame && S.track) marks = marksAt(el.video.currentTime || 0);
-    if (!marks) {
-      if (!fid || !S.frames[fid]) return;
-      marks = S.frames[fid].marks;
+    var pose = (!S.curFrame && S.track) ? poseAt(el.video.currentTime || 0) : null;
+    if (pose) { drawPose(pose, hotBones(fid)); return; }
+    drawMarkSkeleton(fid);
+  }
+
+  function hotBones(fid) {
+    var hot = {};
+    if (!S.report || !fid) return hot;
+    faultsOfStep(fid).forEach(function (f) {
+      (F.HOTSPOT[f.faultId] || []).forEach(function (j) {
+        (HOT_BONE[j] || []).forEach(function (b) {
+          if (!hot[b] || hot[b] < f.sev) hot[b] = f.sev;
+        });
+      });
+    });
+    return hot;
+  }
+  function sevColor(sev) {
+    return sev >= 3 ? '#ff4d42' : sev === 2 ? '#ff8a3d' : '#ffd400';
+  }
+
+  function drawPose(pose, hot) {
+    var scale = Math.min(el.canvas.clientWidth, el.canvas.clientHeight);
+    var bw = Math.max(3, scale * 0.011);      // 뼈 굵기
+    var jr = Math.max(2.6, scale * 0.0085);   // 관절 점 반지름
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+    // 1) 어두운 테두리를 먼저 깔아 밝은 잔디·조명 위에서도 뼈가 보이게 한다
+    ctx.strokeStyle = 'rgba(0,0,0,.42)'; ctx.lineWidth = bw + 3;
+    BONES.forEach(function (b) { strokeBone(pose, b); });
+
+    // 2) 성한 뼈 — 흰색
+    ctx.strokeStyle = 'rgba(255,255,255,.94)'; ctx.lineWidth = bw;
+    BONES.forEach(function (b) { if (!hot[b[0] + '-' + b[1]]) strokeBone(pose, b); });
+
+    // 3) 문제 뼈 — 심각도에 따라 노랑→주황→빨강
+    BONES.forEach(function (b) {
+      var sev = hot[b[0] + '-' + b[1]];
+      if (!sev) return;
+      ctx.strokeStyle = sevColor(sev); ctx.lineWidth = bw + 1.2;
+      strokeBone(pose, b);
+    });
+
+    // 4) 관절 — 흰 점에 어두운 테두리
+    var seen = {};
+    BONES.forEach(function (b) {
+      b.forEach(function (k2) {
+        if (seen[k2] || !pose[k2]) return;
+        seen[k2] = 1;
+        var p = toPx(pose[k2]);
+        ctx.beginPath(); ctx.arc(p.x, p.y, jr, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.lineWidth = Math.max(1, bw * 0.35); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.stroke();
+      });
+    });
+
+    // 5) 머리 — 뼈 끝에 점 하나면 사람으로 안 보인다. 동그라미를 씌운다.
+    if (pose.head && pose.neck) {
+      var hp = toPx(pose.head), np = toPx(pose.neck);
+      var hr = Math.max(jr * 2, Math.hypot(np.x - hp.x, np.y - hp.y) * 0.52);
+      ctx.beginPath(); ctx.arc(hp.x, hp.y, hr, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(0,0,0,.42)'; ctx.lineWidth = bw + 3; ctx.stroke();
+      ctx.strokeStyle = hot['head-neck'] ? sevColor(hot['head-neck']) : 'rgba(255,255,255,.94)';
+      ctx.lineWidth = bw; ctx.stroke();
     }
+    ctx.restore();
+  }
+  function strokeBone(pose, b) {
+    if (!pose[b[0]] || !pose[b[1]]) return;
+    var a = toPx(pose[b[0]]), c = toPx(pose[b[1]]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+  }
+
+  /* 직접 찍어서 분석할 때는 찍은 점밖에 없다. 그때는 예전처럼 점을 잇는다. */
+  function drawMarkSkeleton(fid) {
+    if (!fid || !S.frames[fid]) return;
+    var marks = S.frames[fid].marks;
     var links = S.view === 'dtl'
       ? [['head','shoulder'],['shoulder','hip'],['hip','knee'],['shoulder','hands'],['hands','clubhead']]
       : [['leadShoulder','trailShoulder'],['leadHip','trailHip'],['leadShoulder','leadHip'],
          ['trailShoulder','trailHip'],['head','leadShoulder'],['head','trailShoulder'],['hands','clubhead']];
     ctx.save();
-    var zk2 = zoomK();
-    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.6 / zk2;
-    links.forEach(function (L) {
-      if (!marks[L[0]] || !marks[L[1]]) return;
-      var a = toPx(marks[L[0]]), b = toPx(marks[L[1]]);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    });
-    neededFor(fid || S.viewFrame).forEach(function (j) {
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(0,0,0,.42)'; ctx.lineWidth = 5.4;
+    links.forEach(function (L2) { strokeBone(marks, L2); });
+    ctx.strokeStyle = 'rgba(255,255,255,.94)'; ctx.lineWidth = 3.2;
+    links.forEach(function (L2) { strokeBone(marks, L2); });
+    neededFor(fid).forEach(function (j) {
       if (!marks[j.id]) return;
       var p = toPx(marks[j.id]);
-      ctx.beginPath(); ctx.arc(p.x, p.y, 4.2 / zk2, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(p.x, p.y, 4.2, 0, Math.PI * 2);
       ctx.fillStyle = j.color; ctx.fill();
-      ctx.lineWidth = 1.4 / zk2; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.stroke();
+      ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.stroke();
     });
     ctx.restore();
   }
@@ -851,10 +963,67 @@
     return [{ x: a.x - v.x * 0.12, y: a.y - v.y * 0.12 }, { x: a.x + v.x * k, y: a.y + v.y * k }];
   }
 
-  // 지금 걸려 있는 확대 배율. 선 굵기를 이걸로 나눠 화면상 두께를 일정하게 둔다.
-  function zoomK() {
-    return (S.zoom && el['t-zoom'].classList.contains('on')) ? S.zoom.k : 1;
+  /* 확대를 실제 레이아웃 크기로 하므로 캔버스도 같이 커진다. 굵기 2px 로 그리면
+   * 화면에서도 2px 이다. 그래서 더 이상 배율로 나눌 필요가 없다(항상 1). */
+  function zoomK() { return 1; }
+  /* 손·헤드 궤적을 만든다.
+   *
+   * 전 프레임을 그냥 이으면 낙서가 된다. 이유는 셋이다.
+   *   1) 스윙 전후로 서 있는 구간까지 이어 붙는다
+   *   2) 어두운 실내에서 손이 몸에 가리면 관절이 배경으로 튄다
+   *   3) 한 프레임만 튀어도 선이 화면 끝까지 갔다 온다
+   * 그래서 스윙 구간만 자르고, 신뢰도 낮은 프레임을 빼고, 튄 점을 중앙값으로
+   * 눌러 없앤 뒤, 그래도 남는 큰 점프에서는 선을 잇지 않고 끊는다. */
+  function tracePath(key) {
+    if (!S.track || !S.track.length) {
+      var man = [];
+      D.FRAMES.forEach(function (f) {
+        var fr = S.frames[f.id];
+        if (fr && fr.marks[key]) man.push(fr.marks[key]);
+      });
+      return man.length > 1 ? [man] : [];
+    }
+    var t0 = S.frames.P1 ? S.frames.P1.t : null;
+    var t1 = S.frames.P10 ? S.frames.P10.t
+           : (S.frames.P7 ? S.frames.P7.t : null);
+    var raw = [], torso = 0.12;
+    S.track.forEach(function (f) {
+      if (!f.marks[key]) return;
+      if (t0 != null && f.t < t0 - 0.05) return;      // 어드레스 전
+      if (t1 != null && f.t > t1 + 0.10) return;      // 피니시 후
+      if (f.vis != null && f.vis < 0.6) return;       // 관절을 못 믿는 프레임
+      if (f.torso) torso = Math.max(torso, f.torso);
+      raw.push(f.marks[key]);
+    });
+    if (raw.length < 3) return raw.length > 1 ? [raw] : [];
+
+    // 중앙값 3점 — 혼자 튄 점 하나는 여기서 사라진다.
+    var med = raw.map(function (p, i) {
+      if (i === 0 || i === raw.length - 1) return p;
+      var a = raw[i - 1], b = raw[i + 1];
+      return { x: [a.x, p.x, b.x].sort(num)[1], y: [a.y, p.y, b.y].sort(num)[1] };
+    });
+    // 평균 3점 — 남은 잔떨림을 부드럽게 편다.
+    var sm = med.map(function (p, i) {
+      if (i === 0 || i === med.length - 1) return p;
+      return { x: (med[i - 1].x + p.x + med[i + 1].x) / 3,
+               y: (med[i - 1].y + p.y + med[i + 1].y) / 3 };
+    });
+    // 그래도 손이 순간이동한 자리는 잇지 않고 끊는다.
+    var asp = (el.video.videoWidth && el.video.videoHeight)
+      ? el.video.videoWidth / el.video.videoHeight : 1;
+    var lim = torso * 2.2;                 // 한 프레임에 몸통 길이의 2.2배 넘게 못 간다
+    var out = [], cur = [sm[0]];
+    for (var i = 1; i < sm.length; i++) {
+      var dx = (sm[i].x - sm[i - 1].x) * asp, dy = sm[i].y - sm[i - 1].y;
+      if (Math.hypot(dx, dy) > lim) { if (cur.length > 1) out.push(cur); cur = []; }
+      cur.push(sm[i]);
+    }
+    if (cur.length > 1) out.push(cur);
+    return out;
   }
+  function num(a, b) { return a - b; }
+
   function drawShapes(shapes) {
     var zk = zoomK();
     ctx.save();
@@ -887,21 +1056,15 @@
         ctx.fillStyle = sh.color; ctx.fill();
         ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.5 / zk; ctx.stroke();
       } else if (sh.type === 'trace') {
-        var key = sh.points[0], pts = [];
-        if (S.track && S.track.length) {
-          // 전 프레임을 이으면 진짜 스윙 궤적이 된다. 구간 8개만 이으면 지그재그가 된다.
-          S.track.forEach(function (f) { if (f.marks[key]) pts.push(toPx(f.marks[key])); });
-        } else {
-          D.FRAMES.forEach(function (f) {
-            var fr = S.frames[f.id];
-            if (fr && fr.marks[key]) pts.push(toPx(fr.marks[key]));
-          });
-        }
-        if (pts.length > 1) {
-          ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-          for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        var key = sh.points[0];
+        var segs = tracePath(key);
+        segs.forEach(function (seg) {
+          if (seg.length < 2) return;
+          ctx.beginPath();
+          var q0 = toPx(seg[0]); ctx.moveTo(q0.x, q0.y);
+          for (var i = 1; i < seg.length; i++) { var q = toPx(seg[i]); ctx.lineTo(q.x, q.y); }
           ctx.stroke();
-        }
+        });
         // 전 프레임을 점으로 다 찍으면 지저분하다. 구간 위치에만 점을 둔다.
         D.FRAMES.forEach(function (f) {
           var fr = S.frames[f.id];
@@ -954,8 +1117,10 @@
     // 확대가 아예 안 걸린다.
     requestAnimationFrame(function () {
       fitCanvas();
+      // 확대는 미리 계산만 해 두고 걸지는 않는다. 확대하면 화질이 떨어지므로
+      // 켤지 말지는 보는 사람이 🔍 로 고른다.
       computeZoom();
-      applyZoom(true);
+      applyZoom(false);
       fitCanvas();
     });
   }
@@ -1014,9 +1179,12 @@
     if (x1 - x0 <= 0.02 || y1 - y0 <= 0.02) return;
 
     // 잘라낸 뒤 화면에 실제로 보이는 크기 기준으로 배율을 잡는다.
-    var cw = el.canvas.clientWidth, ch = el.canvas.clientHeight;
+    // 기준은 무대(보이는 창) 크기다. 캔버스는 확대하면 같이 커지므로 쓸 수 없다.
+    var cw = el.stage.clientWidth, ch = el.stage.clientHeight;
     if (!cw || !ch) return;
-    var q0 = toPx({ x: x0, y: y0 }), q1 = toPx({ x: x1, y: y1 });
+    var sb = boxOf(cw, ch);
+    var atStage = function (p) { return { x: sb.x + p.x * sb.w, y: sb.y + p.y * sb.h }; };
+    var q0 = atStage({ x: x0, y: y0 }), q1 = atStage({ x: x1, y: y1 });
     var bw = Math.abs(q1.x - q0.x), bh = Math.abs(q1.y - q0.y);
     if (bw < 4 || bh < 4) return;
     var k2 = Math.min(cw / bw, ch / bh);
@@ -1027,40 +1195,38 @@
      * 볼을 화면 끝쪽에 붙여야 사람이 반대쪽으로 들어와 스윙이 다 보인다. */
     var visW = cw / k;
     var f = (side > 0) ? 0.88 : 0.12;      // 볼을 화면의 이 자리에 둔다
-    var wantX = ball ? (toPx(ball).x - (f - 0.5) * visW) : (q0.x + q1.x) / 2;
+    var wantX = ball ? (atStage(ball).x - (f - 0.5) * visW) : (q0.x + q1.x) / 2;
     var lox = q1.x - visW / 2, hix = q0.x + visW / 2;
     var cxPx = (lox > hix) ? (lox + hix) / 2 : Math.min(hix, Math.max(lox, wantX));
     var cyPx = (q0.y + q1.y) / 2;
-    var cn = toNorm(cxPx, cyPx);
-    S.zoom = { k: k, cx: cn.x, cy: cn.y };
+    S.zoom = { k: k, cx: (cxPx - sb.x) / sb.w, cy: (cyPx - sb.y) / sb.h };
   }
 
   function applyZoom(on) {
-    var z = S.zoom;
-    if (!z || !on) {
-      el['stage-zoom'].style.transform = '';
-      el['stage-zoom'].style.transformOrigin = '';
+    var z = S.zoom, zel = el['stage-zoom'];
+    var SW = el.stage.clientWidth, SH = el.stage.clientHeight;
+    if (!z || !on || !SW || !SH) {
+      zel.style.left = '0px'; zel.style.top = '0px';
+      zel.style.width = '100%'; zel.style.height = '100%';
       el['t-zoom'].classList.remove('on');
-      return;
+      fitCanvas(); return;
     }
-    // 확대 중심은 화면 안에서의 위치로 잡아야 한다(영상 좌표가 아니라).
-    var c = toPx({ x: z.cx, y: z.cy });
-    var ow = el.canvas.clientWidth || 1, oh = el.canvas.clientHeight || 1;
-    /* 확대만 걸면 잡은 자리가 원래 있던 곳에 그대로 남는다. 사람이 화면
-     * 왼쪽 끝에 있으면 확대해도 왼쪽 끝에 붙어 잘린다. 그래서 잡은 자리를
-     * 화면 한가운데로 끌어오되, 영상 바깥의 빈 자리가 보이지 않는 만큼만
-     * 민다. */
-    var k = z.k;
-    var dx = clamp(ow / 2 - c.x, -(ow - c.x) * (k - 1), c.x * (k - 1));
-    var dy = clamp(oh / 2 - c.y, -(oh - c.y) * (k - 1), c.y * (k - 1));
-    el['stage-zoom'].style.transformOrigin =
-      (c.x / ow * 100).toFixed(1) + '% ' + (c.y / oh * 100).toFixed(1) + '%';
-    el['stage-zoom'].style.transform =
-      'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) scale(' + k.toFixed(3) + ')';
+    /* 안쪽 화면을 k 배로 "실제로" 키우고, 보고 싶은 자리가 무대 한가운데
+     * 오도록 밀어 넣는다. 영상은 커진 크기 그대로 그려지므로 뭉개지지 않고,
+     * 캔버스도 같이 커지므로 선도 또렷하다. */
+    var k = z.k, W = SW * k, H = SH * k;
+    var b = boxOf(SW, SH);
+    var cx = b.x + z.cx * b.w, cy = b.y + z.cy * b.h;
+    var left = clamp(SW / 2 - k * cx, SW - W, 0);
+    var top = clamp(SH / 2 - k * cy, SH - H, 0);
+    zel.style.width = Math.round(W) + 'px'; zel.style.height = Math.round(H) + 'px';
+    zel.style.left = Math.round(left) + 'px'; zel.style.top = Math.round(top) + 'px';
     el['t-zoom'].classList.add('on');
+    fitCanvas();
   }
   function clamp(v, lo, hi) { return lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)); }
-  function setZoom(on) { applyZoom(on); fitCanvas(); }
+
+  function setZoom(on) { applyZoom(on); draw(); }
   el['t-zoom'].addEventListener('click', function () {
     if (!S.zoom) { computeZoom(); }
     setZoom(!this.classList.contains('on'));
@@ -1081,6 +1247,7 @@
     var seen = {}, out = [];
     S.report.shapes.forEach(function (sh) {
       if (!sh.label || seen[sh.label]) return;
+      if (S.overlay !== 'all' && sh.only === 'all') return;
       if (S.overlay !== 'all' && sh.steps && (!vf || sh.steps.indexOf(vf) < 0)) return;
       seen[sh.label] = 1;
       out.push('<i style="--c:' + (sh.color || '#fff') + '">' + esc(sh.label) + '</i>');
@@ -1406,8 +1573,10 @@
     h.push('<div class="legend">' +
       '<i style="--sw:#4dd4ac">정상 플레인 밴드</i>' +
       '<i style="--sw:#ffb570">척추선</i>' +
-      '<i style="--sw:#ffd166">머리 허용 범위</i>' +
-      '<i style="--sw:#ff8fb3">손 궤적</i></div>');
+      '<i style="--sw:#4ab8ff">골반 기준선</i>' +
+      '<i style="--sw:#ffd166">머리 기준선</i></div>' +
+      '<p class="hint">단계마다 그 단계의 근거가 되는 선만 나옵니다. ' +
+      '📐 를 눌러 <b>전부 보기</b>로 바꾸면 손 궤적처럼 참고용 선까지 다 볼 수 있습니다.</p>');
 
     // 측정치 표
     var nBad = 0;
@@ -1770,7 +1939,7 @@
   }
 
   /* 화면이 제대로 잡혔는지 밖에서 재 볼 수 있게 열어 둔다(점검용). */
-  window.SwingUI = { state: S, box: box, toPx: toPx };
+  window.SwingUI = { state: S, box: box, toPx: toPx, tracePath: tracePath };
 
   /* ── 시작 ────────────────────────────────────────────────────── */
   restorePrefs();
