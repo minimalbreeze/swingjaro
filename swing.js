@@ -697,9 +697,12 @@
   function toNorm(px, py) { var b = box(); return { x: (px - b.x) / b.w, y: (py - b.y) / b.h }; }
 
   function evPos(e) {
+    // 확대가 걸려 있으면 화면상 크기와 캔버스 좌표계 크기가 다르다. 비율로 되돌린다.
     var r = el.canvas.getBoundingClientRect();
     var t = e.touches && e.touches[0] ? e.touches[0] : e;
-    return { x: t.clientX - r.left, y: t.clientY - r.top };
+    var cw = el.canvas.clientWidth || 1, ch = el.canvas.clientHeight || 1;
+    var sx = r.width / cw || 1, sy = r.height / ch || 1;
+    return { x: (t.clientX - r.left) / sx, y: (t.clientY - r.top) / sy };
   }
   function hitJoint(pos) {
     if (!S.curFrame) return null;
@@ -980,11 +983,36 @@
     var xs = pts.map(function (p) { return p.x; }), ys = pts.map(function (p) { return p.y; });
     var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
     var y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
-    // 클럽이 몸 밖으로 크게 나가므로 넉넉히 여백을 둔다
-    var mx = (x1 - x0) * 0.42 + 0.05, my = (y1 - y0) * 0.18 + 0.04;
-    x0 = Math.max(0, x0 - mx); x1 = Math.min(1, x1 + mx);
-    y0 = Math.max(0, y0 - my); y1 = Math.min(1, y1 + my);
+
+    /* 여백은 좌우 같은 값을 주면 안 된다. 클럽은 톱에서 몸 반대쪽(볼이 없는 쪽)
+     * 위로 크게 빠져나가고, 볼 쪽으로는 더 나갈 것이 없다. 그래서 볼 쪽은 바짝
+     * 붙여 볼이 화면 끝에 오게 하고, 반대쪽과 위쪽에만 클럽 길이만큼 자리를 준다.
+     * 클럽 길이는 어드레스의 손~볼 거리로 잰다(그게 곧 샤프트 길이다). */
+    var aspect = (el.video.videoWidth && el.video.videoHeight)
+      ? el.video.videoWidth / el.video.videoHeight : 1;
+    var P1 = S.frames.P1 && S.frames.P1.marks;
+    var ball = P1 && P1.ball;
+    var clubLen = 0, side = 1;               // side: 볼이 몸의 어느 쪽에 있나
+    if (ball && P1.hands) {
+      var dx = (ball.x - P1.hands.x) * aspect, dy = ball.y - P1.hands.y;
+      clubLen = Math.sqrt(dx * dx + dy * dy);
+      side = (dx >= 0) ? 1 : -1;
+    }
+    if (!clubLen) clubLen = (y1 - y0) * 0.55;   // 볼을 모르면 몸 높이로 어림한다
+    var padX = clubLen * 0.62 / (aspect || 1); // 가로는 화면 비율로 되돌린다
+    var padY = clubLen * 0.55;                 // 백스윙 톱의 클럽이 들어올 만큼
+    var near = 0.025;                          // 볼 쪽 여백은 최소로
+
+    if (ball) {
+      x0 = Math.min(x0, ball.x); x1 = Math.max(x1, ball.x);
+      y1 = Math.max(y1, ball.y);
+    }
+    if (side > 0) { x0 -= padX; x1 += near; } else { x0 -= near; x1 += padX; }
+    y0 -= padY; y1 += near;
+    x0 = Math.max(0, x0); x1 = Math.min(1, x1);
+    y0 = Math.max(0, y0); y1 = Math.min(1, y1);
     if (x1 - x0 <= 0.02 || y1 - y0 <= 0.02) return;
+
     // 잘라낸 뒤 화면에 실제로 보이는 크기 기준으로 배율을 잡는다.
     var cw = el.canvas.clientWidth, ch = el.canvas.clientHeight;
     if (!cw || !ch) return;
@@ -993,8 +1021,20 @@
     if (bw < 4 || bh < 4) return;
     var k2 = Math.min(cw / bw, ch / bh);
     if (k2 < 1.12) return;                 // 이미 꽉 차 있으면 굳이 키우지 않는다
-    S.zoom = { k: Math.min(k2, 2.6), cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+    var k = Math.min(k2, 2.4);
+
+    /* 가로·세로 비율이 달라 남는 자리가 생기면 그냥 가운데 두지 않는다.
+     * 볼을 화면 끝쪽에 붙여야 사람이 반대쪽으로 들어와 스윙이 다 보인다. */
+    var visW = cw / k;
+    var f = (side > 0) ? 0.88 : 0.12;      // 볼을 화면의 이 자리에 둔다
+    var wantX = ball ? (toPx(ball).x - (f - 0.5) * visW) : (q0.x + q1.x) / 2;
+    var lox = q1.x - visW / 2, hix = q0.x + visW / 2;
+    var cxPx = (lox > hix) ? (lox + hix) / 2 : Math.min(hix, Math.max(lox, wantX));
+    var cyPx = (q0.y + q1.y) / 2;
+    var cn = toNorm(cxPx, cyPx);
+    S.zoom = { k: k, cx: cn.x, cy: cn.y };
   }
+
   function applyZoom(on) {
     var z = S.zoom;
     if (!z || !on) {
@@ -1006,11 +1046,20 @@
     // 확대 중심은 화면 안에서의 위치로 잡아야 한다(영상 좌표가 아니라).
     var c = toPx({ x: z.cx, y: z.cy });
     var ow = el.canvas.clientWidth || 1, oh = el.canvas.clientHeight || 1;
+    /* 확대만 걸면 잡은 자리가 원래 있던 곳에 그대로 남는다. 사람이 화면
+     * 왼쪽 끝에 있으면 확대해도 왼쪽 끝에 붙어 잘린다. 그래서 잡은 자리를
+     * 화면 한가운데로 끌어오되, 영상 바깥의 빈 자리가 보이지 않는 만큼만
+     * 민다. */
+    var k = z.k;
+    var dx = clamp(ow / 2 - c.x, -(ow - c.x) * (k - 1), c.x * (k - 1));
+    var dy = clamp(oh / 2 - c.y, -(oh - c.y) * (k - 1), c.y * (k - 1));
     el['stage-zoom'].style.transformOrigin =
       (c.x / ow * 100).toFixed(1) + '% ' + (c.y / oh * 100).toFixed(1) + '%';
-    el['stage-zoom'].style.transform = 'scale(' + z.k.toFixed(3) + ')';
+    el['stage-zoom'].style.transform =
+      'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) scale(' + k.toFixed(3) + ')';
     el['t-zoom'].classList.add('on');
   }
+  function clamp(v, lo, hi) { return lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)); }
   function setZoom(on) { applyZoom(on); fitCanvas(); }
   el['t-zoom'].addEventListener('click', function () {
     if (!S.zoom) { computeZoom(); }
@@ -1719,6 +1768,9 @@
       n.classList.toggle('on', n.dataset.h === S.handed);
     });
   }
+
+  /* 화면이 제대로 잡혔는지 밖에서 재 볼 수 있게 열어 둔다(점검용). */
+  window.SwingUI = { state: S, box: box, toPx: toPx };
 
   /* ── 시작 ────────────────────────────────────────────────────── */
   restorePrefs();
