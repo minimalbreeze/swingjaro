@@ -12,17 +12,17 @@
    *            라이각과는 다르다. 카메라가 뒤에서 볼 때 화면에 찍히는 각도라
    *            팔이 늘어진 만큼 라이각보다 완만하게 보인다.
    * attack   : 이상적인 입사각(+ 는 어퍼블로).
-   * carryK   : 캐리(야드) ÷ 헤드스피드(mph) 환산 계수. 헤드스피드 역산에 쓴다.
-   * refCarry : 아마추어 남성 중급 기준 캐리(야드). 거리 진단의 비교선.
+   * carryK   : 캐리(미터) ÷ 헤드스피드(mph) 환산 계수. 헤드스피드 역산에 쓴다.
+   * refCarry : 아마추어 남성 중급 기준 캐리(미터). 거리 진단의 비교선.
    */
   var CLUBS = {
-    driver:  { id:'driver',  label:'드라이버',      short:'DR',  emoji:'🏌️', planeDeg:48, planeTol:6, attack:[ 1, 5], ballPos:'왼발 뒤꿈치 안쪽', carryK:2.28, refCarry:214, spineTilt:[30,38], shoulderTiltP1:[10,18], shaftLeanP7:[-10, 2] },
-    wood:    { id:'wood',    label:'페어웨이 우드',  short:'FW',  emoji:'🌲', planeDeg:52, planeTol:6, attack:[-2, 1], ballPos:'왼겨드랑이 아래',   carryK:2.14, refCarry:195, spineTilt:[31,39], shoulderTiltP1:[8,15],  shaftLeanP7:[-5, 4] },
-    hybrid:  { id:'hybrid',  label:'유틸리티',      short:'UT',  emoji:'🪄', planeDeg:55, planeTol:6, attack:[-3,-1], ballPos:'중앙에서 공 2개 왼쪽', carryK:2.02, refCarry:180, spineTilt:[32,40], shoulderTiltP1:[7,14],  shaftLeanP7:[-2, 7] },
-    long:    { id:'long',    label:'롱아이언 (4·5)', short:'L-I', emoji:'📏', planeDeg:58, planeTol:6, attack:[-4,-2], ballPos:'중앙에서 공 1.5개 왼쪽', carryK:1.90, refCarry:165, spineTilt:[33,41], shoulderTiltP1:[6,13],  shaftLeanP7:[1, 10] },
-    mid:     { id:'mid',     label:'미들아이언 (6·7·8)', short:'M-I', emoji:'⛳', planeDeg:61, planeTol:6, attack:[-5,-3], ballPos:'스탠스 중앙',      carryK:1.77, refCarry:145, spineTilt:[34,42], shoulderTiltP1:[5,12],  shaftLeanP7:[4, 14] },
-    short:   { id:'short',   label:'숏아이언 (9·PW)', short:'S-I', emoji:'🎯', planeDeg:63, planeTol:6, attack:[-6,-4], ballPos:'중앙에서 공 0.5개 오른쪽', carryK:1.51, refCarry:115, spineTilt:[35,43], shoulderTiltP1:[4,11],  shaftLeanP7:[6, 16] },
-    wedge:   { id:'wedge',   label:'웨지',          short:'WG',  emoji:'🔧', planeDeg:65, planeTol:7, attack:[-7,-4], ballPos:'중앙~중앙 오른쪽',   carryK:1.18, refCarry:85,  spineTilt:[35,44], shoulderTiltP1:[3,10],  shaftLeanP7:[7, 18] }
+    driver:  { id:'driver',  label:'드라이버',      short:'DR',  emoji:'🏌️', planeDeg:48, planeTol:6, attack:[ 1, 5], ballPos:'왼발 뒤꿈치 안쪽', carryK:2.085, refCarry:196, spineTilt:[30,38], shoulderTiltP1:[10,18], shaftLeanP7:[-10, 2] },
+    wood:    { id:'wood',    label:'페어웨이 우드',  short:'FW',  emoji:'🌲', planeDeg:52, planeTol:6, attack:[-2, 1], ballPos:'왼겨드랑이 아래',   carryK:1.957, refCarry:178, spineTilt:[31,39], shoulderTiltP1:[8,15],  shaftLeanP7:[-5, 4] },
+    hybrid:  { id:'hybrid',  label:'유틸리티',      short:'UT',  emoji:'🪄', planeDeg:55, planeTol:6, attack:[-3,-1], ballPos:'중앙에서 공 2개 왼쪽', carryK:1.847, refCarry:165, spineTilt:[32,40], shoulderTiltP1:[7,14],  shaftLeanP7:[-2, 7] },
+    long:    { id:'long',    label:'롱아이언 (4·5)', short:'L-I', emoji:'📏', planeDeg:58, planeTol:6, attack:[-4,-2], ballPos:'중앙에서 공 1.5개 왼쪽', carryK:1.737, refCarry:151, spineTilt:[33,41], shoulderTiltP1:[6,13],  shaftLeanP7:[1, 10] },
+    mid:     { id:'mid',     label:'미들아이언 (6·7·8)', short:'M-I', emoji:'⛳', planeDeg:61, planeTol:6, attack:[-5,-3], ballPos:'스탠스 중앙',      carryK:1.618, refCarry:133, spineTilt:[34,42], shoulderTiltP1:[5,12],  shaftLeanP7:[4, 14] },
+    short:   { id:'short',   label:'숏아이언 (9·PW)', short:'S-I', emoji:'🎯', planeDeg:63, planeTol:6, attack:[-6,-4], ballPos:'중앙에서 공 0.5개 오른쪽', carryK:1.381, refCarry:105, spineTilt:[35,43], shoulderTiltP1:[4,11],  shaftLeanP7:[6, 16] },
+    wedge:   { id:'wedge',   label:'웨지',          short:'WG',  emoji:'🔧', planeDeg:65, planeTol:7, attack:[-7,-4], ballPos:'중앙~중앙 오른쪽',   carryK:1.079, refCarry:78,  spineTilt:[35,44], shoulderTiltP1:[3,10],  shaftLeanP7:[7, 18] }
   };
   var CLUB_ORDER = ['driver','wood','hybrid','long','mid','short','wedge'];
 

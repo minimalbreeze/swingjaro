@@ -68,7 +68,7 @@
       yMin = Math.floor((lo - pad) / 5) * 5; yMax = Math.ceil((hi + pad) / 5) * 5;
       if (yMax - yMin < 10) yMax = yMin + 10;
       yTicks = [yMin, (yMin + yMax) / 2, yMax].map(function (v) {
-        return { v: v, t: Math.round(v) + 'yd' };
+        return { v: v, t: Math.round(v) + 'm' };
       });
     } else {
       yMin = -2.6; yMax = 2.6;
@@ -116,7 +116,7 @@
     rows.forEach(function (r, i) {
       var yv = mode === 'carry' ? r.outcome.carry : r.outcome.dir;
       var title = ymd(r.at) + ' · 점수 ' + r.score + ' · ' +
-        (mode === 'carry' ? r.outcome.carry + '야드' : dirLabel(r.outcome.dir));
+        (mode === 'carry' ? r.outcome.carry + 'm' : dirLabel(r.outcome.dir));
       g.push('<circle class="pt" data-i="' + i + '" cx="' + X(r.score).toFixed(1) + '" cy="' + Y(yv).toFixed(1) +
         '" r="5" fill="' + MARK + '" stroke="#fff" stroke-width="2"><title>' + esc(title) + '</title></circle>');
     });
@@ -206,29 +206,22 @@
         '<thead><tr><th>날짜</th><th>점수</th><th>캐리</th><th>방향</th><th>메모</th></tr></thead><tbody>' +
         rows.slice().reverse().map(function (x) {
           return '<tr><td>' + ymd(x.at) + '</td><td>' + x.score + '</td><td>' +
-            (x.outcome.carry > 0 ? x.outcome.carry + 'yd' : '–') + '</td><td>' +
+            (x.outcome.carry > 0 ? x.outcome.carry + 'm' : '–') + '</td><td>' +
             esc(dirLabel(x.outcome.dir)) + '</td><td>' + esc(x.outcome.note || '') + '</td></tr>';
         }).join('') + '</tbody></table></details>');
     }
-    h.push('<div class="lbackup"><b>내 기록 관리</b>' +
-      '<p>기록은 이 브라우저 안에만 있습니다. 폰을 바꾸거나 사이트 데이터를 지우면 사라지니 ' +
-      '가끔 파일로 내려받아 두세요.</p>' +
-      '<div class="lbackup-btns">' +
-      '<button type="button" class="mini" id="log-export">⬇ 파일로 내보내기</button>' +
-      '<button type="button" class="mini" id="log-import">⬆ 파일에서 가져오기</button>' +
-      '<button type="button" class="mini" id="log-fill">📋 내 클럽 거리 채우기</button>' +
-      '</div><input type="file" id="log-file" accept="application/json,.json" hidden /></div>');
-
     box.innerHTML = h.join('');
   }
 
   /* 진단 화면 아래에 붙는 결과 입력 폼 */
   function outcomeForm() {
-    return '<div class="ocard"><b>오늘 실제로 어땠나요?</b>' +
-      '<p>이걸 남겨야 이 앱의 진단이 나에게 실제로 맞는지 나중에 확인할 수 있습니다. ' +
+    // 접어 둔다. 진단 화면이 폰에서 너무 길어지지 않도록.
+    return '<details class="fold ocard" open><summary>📝 오늘 실제로 어땠나요?</summary>' +
+      '<div class="fold-b">' +
+      '<p class="hint">이걸 남겨야 이 앱의 진단이 나에게 실제로 맞는지 나중에 확인할 수 있습니다. ' +
       '건너뛰어도 진단 결과는 그대로입니다.</p>' +
       '<div class="orow"><label>이 클럽 캐리</label>' +
-      '<input type="number" id="o-carry" inputmode="numeric" placeholder="예: 150" min="10" max="400" /><span>야드</span></div>' +
+      '<input type="number" id="o-carry" inputmode="numeric" placeholder="예: 135" min="10" max="350" /><span>미터</span></div>' +
       '<div class="orow col"><label>주로 간 방향</label><div class="seg wrap" id="o-dir">' +
       DIRS.map(function (d) {
         return '<button type="button" data-d="' + d.v + '"' + (d.v === 0 ? ' class="on"' : '') + '>' +
@@ -237,7 +230,7 @@
       '<div class="orow col"><label>메모 (선택)</label>' +
       '<input type="text" id="o-note" maxlength="40" placeholder="예: 바람 맞바람, 새 샤프트 첫날" /></div>' +
       '<button type="button" class="mini prim wide" id="o-save">이 회차 결과 저장</button>' +
-      '<p class="osaved" id="o-saved" hidden></p></div>';
+      '<p class="osaved" id="o-saved" hidden></p></div></details>';
   }
 
   global.SwingLog = { render: render, outcomeForm: outcomeForm, DIRS: DIRS, dirLabel: dirLabel, MIN_N: MIN_N };

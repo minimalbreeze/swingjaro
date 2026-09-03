@@ -41,7 +41,8 @@
    'hand-seg','mark-auto','auto-note','btn-log','logbox','outcome-slot',
    'mydist','mydist-sum','mydist-grid',
    'btn-shape','btn-ask','shape-grid','shape-seg','shapebox','ask-q','askbox',
-   'install-card','install-btn','install-steps','install-steps-b'].forEach(function (id) {
+   'install-card','install-btn','install-steps','install-steps-b',
+   'vstat','stickybar','sb-prog'].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
@@ -51,18 +52,25 @@
       var n = document.getElementById('s-' + s);
       if (n) n.hidden = (s !== step);
     });
-    var hit = false;
-    Array.prototype.forEach.call(el.steps.children, function (li) {
-      var s = li.dataset.step;
-      li.classList.toggle('on', s === step);
-      li.classList.toggle('done', !hit && s !== step);
-      if (s === step) hit = true;
+    var active = null;
+    Array.prototype.forEach.call(el.steps.children, function (n) {
+      if (n.dataset && n.dataset.step) {
+        var on = n.dataset.step === step;
+        n.classList.toggle('on', on);
+        if (on) active = n;
+      } else n.classList.remove('on');
     });
+    // 가로 스크롤 내비게이션에서 지금 화면이 안 보이면 끌어온다
+    if (active && active.scrollIntoView) {
+      active.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
     // 무대(영상+캔버스)는 하나뿐이라 필요한 화면으로 옮겨 붙인다.
     var slot = step === 'mark' ? el['stage-slot-mark']
              : step === 'report' ? el['stage-slot-report'] : null;
     if (slot && el.stage.parentNode !== slot) slot.appendChild(el.stage);
     el.stage.hidden = !slot;
+    // 고정 바는 구간 지정 화면에서만 띄운다
+    el.stickybar.classList.toggle('show', step === 'mark');
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (slot) requestAnimationFrame(fitCanvas);
@@ -119,11 +127,13 @@
     var b = e.target.closest('[data-h]'); if (!b) return;
     S.handed = b.dataset.h;
     Array.prototype.forEach.call(this.children, function (n) { n.classList.toggle('on', n === b); });
+    updateMyDistSummary(); buildShapeGrid();
   });
   el['sens-seg'].addEventListener('click', function (e) {
     var b = e.target.closest('[data-v]'); if (!b) return;
     S.sensitivity = b.dataset.v;
     Array.prototype.forEach.call(this.children, function (n) { n.classList.toggle('on', n === b); });
+    updateMyDistSummary();
   });
   /* ── 내 클럽 거리 ─────────────────────────────────────────────
    * 혼자 쓰는 앱이니 비교 기준을 "아마추어 평균"이 아니라 내 숫자로 둔다.
@@ -142,13 +152,19 @@
       var c = D.CLUBS[id], v = S.profile.carries[id] || '';
       return '<label class="mdrow"><span>' + c.emoji + ' ' + esc(c.label) + '</span>' +
         '<input type="number" inputmode="numeric" data-dist-club="' + id + '" value="' + v +
-        '" placeholder="' + c.refCarry + '" min="10" max="400" /><em>yd</em></label>';
+        '" placeholder="' + c.refCarry + '" min="10" max="350" /><em>m</em></label>';
     }).join('');
     updateMyDistSummary();
   }
   function updateMyDistSummary() {
     var n = Object.keys(S.profile.carries).filter(function (k) { return S.profile.carries[k] > 0; }).length;
-    el['mydist-sum'].textContent = n ? n + '개 클럽 입력됨' : '아직 비어 있음 — 평균값 사용 중';
+    el['mydist-sum'].textContent = n ? '(' + n + '개 입력됨)' : '';
+    var os = document.getElementById('opt-sum');
+    if (os) {
+      os.textContent = (S.handed === 'left' ? '왼손잡이' : '오른손잡이') + ' · ' +
+        ({ strict: '엄격', normal: '보통', lenient: '관대' }[S.sensitivity]) +
+        (n ? ' · 내 거리 ' + n + '개' : '');
+    }
   }
   el['mydist-grid'].addEventListener('change', function (e) {
     var i = e.target.closest('[data-dist-club]'); if (!i) return;
@@ -241,14 +257,24 @@
   el['install-btn'].addEventListener('click', function () {
     window.SwingInstall.install().then(function (r) {
       if (r === 'accepted') {
-        el['install-card'].innerHTML = '<div class="install-h">✅ 추가했습니다</div>' +
-          '<p>홈 화면(또는 바탕화면)의 스윙자로 아이콘으로 바로 여세요.</p>';
+        el['install-card'].innerHTML = '<summary>✅ 바탕화면에 추가했습니다</summary>' +
+          '<div class="fold-b"><p>홈 화면(또는 바탕화면)의 스윙자로 아이콘으로 바로 여세요.</p></div>';
       } else if (r === 'unavailable') {
         el['install-steps'].open = true;
       }
     });
   });
   if (window.SwingInstall) window.SwingInstall.onChange(renderInstall);
+
+  el.steps.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-step]'); if (!b) return;
+    var t = b.dataset.step;
+    if (t === 'mark' && !S.videoURL) { show('video'); return; }
+    if ((t === 'report' || t === 'fit') && !S.report) {
+      show(S.videoURL ? 'mark' : 'video'); return;
+    }
+    show(t);
+  });
 
   el['go-video'].addEventListener('click', function () { show('video'); });
   el['btn-reset'].addEventListener('click', function () {
@@ -258,10 +284,15 @@
   });
 
   /* ── 2. 영상 ─────────────────────────────────────────────────── */
-  el.drop.addEventListener('click', function () { el.file.click(); });
+  function vstat(msg, kind) {
+    el.vstat.hidden = !msg;
+    el.vstat.textContent = msg || '';
+    el.vstat.className = 'vstat' + (kind ? ' ' + kind : '');
+  }
   el.file.addEventListener('change', function () {
     var f = this.files && this.files[0];
-    if (!f) return;
+    if (!f) { vstat('파일이 선택되지 않았습니다. 다시 눌러주세요.', 'bad'); return; }
+    vstat(f.name + ' (' + Math.round(f.size / 1048576) + 'MB) 읽는 중…');
     if (S.videoURL) URL.revokeObjectURL(S.videoURL);
     S.videoURL = URL.createObjectURL(f);
     S.frames = {}; S.report = null; S.curFrame = null; S.viewFrame = null;
@@ -269,13 +300,17 @@
     el.video.load();
   });
   el.video.addEventListener('loadedmetadata', function () {
+    vstat('');
     S.duration = el.video.duration || 0;
     el.seek.value = 0;
     buildFrames(); show('mark');
     setTimeout(function () { seekTo(Math.min(0.05, S.duration)); }, 60);
   });
   el.video.addEventListener('error', function () {
-    if (el.video.src) alert('이 영상 형식은 브라우저가 열지 못했습니다. MP4(H.264)로 변환해 다시 시도해 주세요.');
+    if (!el.video.src) return;
+    // 아이폰에서 찍은 HEVC(H.265) MOV 는 사파리 밖에서 못 여는 경우가 있다.
+    vstat('이 영상을 열지 못했습니다. 아이폰이라면 설정 → 카메라 → 포맷을 "높은 호환성"으로 ' +
+      '바꿔 다시 찍거나, 사파리에서 열어보세요. (MP4·H.264가 가장 안전합니다)', 'bad');
   });
 
   /* ── 3. 스크러빙 ─────────────────────────────────────────────── */
@@ -341,8 +376,14 @@
     var need = D.FRAMES.filter(function (f) { return f.required; });
     var missing = need.filter(function (f) { return !isMarked(f.id); });
     el['go-report'].disabled = missing.length > 0;
+    var doneN = need.length - missing.length;
+    el['sb-prog'].innerHTML = missing.length
+      ? '<b>' + doneN + '/' + need.length + '</b> 필수 구간<br><span>' +
+        esc(missing.map(function (f) { return f.label; }).join(', ')) + ' 남음</span>'
+      : '<b>준비 완료</b><br><span>선택 구간까지 찍으면 더 정확해집니다</span>';
+    el.stickybar.classList.toggle('ready', missing.length === 0);
     el['mark-need'].textContent = missing.length
-      ? '필수 구간(*)이 남았습니다 — ' + missing.map(function (f) { return f.label; }).join(', ')
+      ? '구간 칩을 눌러 그 순간을 지정하고, 안내대로 관절을 찍으세요.'
       : '선택 구간(테이크백·다운스윙)까지 찍으면 플레인 진단이 더 정확해집니다.';
   }
 
@@ -798,8 +839,14 @@
       '<i style="--sw:#ff8fb3">손 궤적</i></div>');
 
     // 측정치 표
-    h.push('<div class="mhead">측정값 <span>내가 찍은 점으로 실제로 잰 값</span>' +
-      '<em>기준 = 코칭 통념 범위</em></div>');
+    var nBad = 0;
+    Object.keys(R.metrics).forEach(function (k) {
+      var m = R.metrics[k];
+      if (m.v != null && !isNaN(m.v) && m.ideal && (m.v < m.ideal[0] || m.v > m.ideal[1])) nBad++;
+    });
+    h.push('<details class="fold"><summary>📐 측정값 자세히 보기 ' +
+      '<span>' + (nBad ? nBad + '개 기준 밖' : '전부 기준 안') + '</span></summary><div class="fold-b">');
+    h.push('<p class="hint">내가 찍은 점으로 실제로 잰 값입니다. 기준은 코칭 통념 범위입니다.</p>');
     h.push('<div class="mtable">');
     Object.keys(R.metrics).forEach(function (k) {
       var m = R.metrics[k];
@@ -813,7 +860,7 @@
       h.push('<div class="mrow' + cls + '"><span class="k">' + esc(m.label) + '</span>' +
         '<span class="v">' + fmt(m.v, m.unit) + '</span><span class="r">' + esc(range) + '</span></div>');
     });
-    h.push('</div>');
+    h.push('</div></div></details>');
 
     if (!R.faults.length) {
       h.push('<div class="okbox"><b>이 각도에서는 기준을 벗어난 항목이 없습니다 ⛳</b>' +
@@ -940,8 +987,8 @@
         '<div><span>이 클럽</span><b>' + s.clubMph + '<small style="font-size:11px"> mph</small></b></div>' +
         '<div><span>드라이버 환산</span><b>' + s.driverMph + '<small style="font-size:11px"> mph</small></b></div>' +
         '<div><span>m/s 환산</span><b>' + s.driverMs + '</b></div>' +
-        '<div><span>' + esc(s.refLabel) + '(' + s.refCarry + 'yd) 대비</span><b>' +
-          (s.gap >= 0 ? '+' : '') + s.gap + '<small style="font-size:11px"> yd</small></b></div>' +
+        '<div><span>' + esc(s.refLabel) + '(' + s.refCarry + 'm) 대비</span><b>' +
+          (s.gap >= 0 ? '+' : '') + s.gap + '<small style="font-size:11px"> m</small></b></div>' +
         '</div></div>');
     }
     if (out.flight) {
@@ -1036,16 +1083,18 @@
   el.logbox.addEventListener('click', function (e) {
     var fbtn = e.target.closest('[data-focus]');
     if (fbtn) { setFocus(fbtn.dataset.focus || null); showLog(); return; }
-    if (e.target.id === 'log-export') { exportAll(); return; }
-    if (e.target.id === 'log-import') { el.logbox.querySelector('#log-file').click(); return; }
-    if (e.target.id === 'log-fill') { fillFromLog(); return; }
     var b = e.target.closest('[data-m]'); if (!b) return;
     S.logMode = b.dataset.m; showLog();
   });
-  el.logbox.addEventListener('change', function (e) {
-    if (e.target.id !== 'log-file') return;
-    var f = e.target.files && e.target.files[0]; if (!f) return;
-    importAll(f);
+  // 백업 버튼은 설정 화면의 "세부 설정" 안에 있다.
+  document.getElementById('log-export').addEventListener('click', exportAll);
+  document.getElementById('log-import').addEventListener('click', function () {
+    document.getElementById('log-file').click();
+  });
+  document.getElementById('log-fill').addEventListener('click', fillFromLog);
+  document.getElementById('log-file').addEventListener('change', function () {
+    var f = this.files && this.files[0]; if (f) importAll(f);
+    this.value = '';
   });
 
   /* ── 내보내기 / 가져오기 ──────────────────────────────────────
@@ -1099,7 +1148,7 @@
       var lines = over.map(function (c) {
         var v = by[c].slice().sort(function (a, b) { return a - b; });
         return '  · ' + D.CLUBS[c].label + ': ' + S.profile.carries[c] + ' → ' +
-          Math.round(v[Math.floor(v.length / 2)]) + 'yd';
+          Math.round(v[Math.floor(v.length / 2)]) + 'm';
       }).join('\n');
       if (!confirm('직접 넣어둔 값을 기록의 중앙값으로 바꿉니다.\n\n' + lines + '\n\n계속할까요?')) return;
     }

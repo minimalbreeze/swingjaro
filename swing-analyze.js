@@ -339,10 +339,10 @@
       // 사람이 낼 수 있는 범위를 벗어나면 숫자를 그대로 쓰지 말라고 알린다.
       if (driverMph > 122 || driverMph < 52) {
         speed.implausible = true;
-        warns.push('입력하신 ' + input.carry + '야드를 ' + club.label +
+        warns.push('입력하신 ' + input.carry + '미터를 ' + club.label +
           ' 기준으로 환산하면 드라이버 헤드 스피드 ' + speed.driverMph +
           ' mph 가 나옵니다. 사람이 내기 어려운 값이라 아래 샤프트 제안은 믿지 마세요. ' +
-          '굴러간 거리를 뺀 캐리인지, 고른 클럽이 실제로 그 거리를 내는 클럽인지 확인해 주세요.');
+          '굴러간 거리를 뺀 캐리(m)인지, 고른 클럽이 실제로 그 거리를 내는 클럽인지 확인해 주세요.');
       }
       items.push({ part:'샤프트 강도', suggest: row.flex,
         why: '추정 헤드 스피드 ' + speed.driverMph + ' mph(드라이버 환산, ' + speed.driverMs + ' m/s) 기준입니다. ' + row.note });
@@ -446,16 +446,16 @@
 
     /* 5) 거리 부족/과다 */
     if (speed) {
-      if (speed.gap <= -20) {
+      if (speed.gap <= -18) {
         items.push({ part:'클럽 총 중량', suggest:'현재보다 10~20g 가벼운 세팅 시타',
-          why:speed.refLabel + '(' + speed.refCarry + '야드)보다 ' + Math.abs(speed.gap) +
-            '야드 짧습니다. 클럽이 무거워 스피드가 눌리고 있을 수 있습니다.' });
+          why:speed.refLabel + '(' + speed.refCarry + 'm)보다 ' + Math.abs(speed.gap) +
+            '미터 짧습니다. 클럽이 무거워 스피드가 눌리고 있을 수 있습니다.' });
         items.push({ part:'볼 압축', suggest:'저압축 볼(컴프레션 50~70)',
           why:'헤드 스피드가 낮을 때 저압축 볼이 초속을 더 잘 만들어 줍니다.' });
-      } else if (speed.gap >= 20) {
+      } else if (speed.gap >= 18) {
         items.push({ part:'스윙웨이트', suggest:'D2~D4 쪽으로 조금 무겁게',
-          why:speed.refLabel + '(' + speed.refCarry + '야드)보다 ' + speed.gap +
-            '야드 깁니다. 무게를 조금 더 주면 방향성이 안정됩니다.' });
+          why:speed.refLabel + '(' + speed.refCarry + 'm)보다 ' + speed.gap +
+            '미터 깁니다. 무게를 조금 더 주면 방향성이 안정됩니다.' });
       }
     }
 

@@ -29,22 +29,20 @@
 
   <header class="hd">
     <div class="hd-in">
-      <h1>스윙자로 <span class="hd-sub">내 연습 노트</span></h1>
-      <span class="hd-actions">
-        <button id="btn-shape" class="hd-btn" type="button">🎯 구질</button>
-        <button id="btn-ask" class="hd-btn" type="button">💬 문의</button>
-        <button id="btn-log" class="hd-btn" type="button">📊 기록</button>
-        <button id="btn-reset" class="hd-btn" type="button">↺</button>
-      </span>
+      <h1>스윙자로</h1>
+      <button id="btn-reset" class="hd-btn" type="button">처음</button>
     </div>
-    <ol class="steps" id="steps">
-      <li data-step="setup">클럽·각도</li>
-      <li data-step="video">영상</li>
-      <li data-step="mark">구간 지정</li>
-      <li data-step="report">진단</li>
-      <li data-step="fit">장비</li>
-      <li data-step="log">기록</li>
-    </ol>
+    <nav class="nav" id="steps">
+      <button class="nv" data-step="setup" type="button">설정</button>
+      <button class="nv" data-step="video" type="button">영상</button>
+      <button class="nv" data-step="mark" type="button">구간</button>
+      <button class="nv" data-step="report" type="button">진단</button>
+      <button class="nv" data-step="fit" type="button">장비</button>
+      <span class="nv-sep"></span>
+      <button class="nv tool" id="btn-shape" type="button">🎯 구질</button>
+      <button class="nv tool" id="btn-ask" type="button">💬 문의</button>
+      <button class="nv tool" id="btn-log" type="button">📊 기록</button>
+    </nav>
   </header>
 
   <main id="main">
@@ -69,47 +67,58 @@
       <h3 class="f-title">촬영 각도</h3>
       <div class="grid-view" id="view-grid"></div>
 
-      <div class="guide-box" id="shoot-guide"></div>
+      <details class="fold"><summary>📷 촬영 가이드</summary>
+        <div class="guide-box" id="shoot-guide"></div>
+      </details>
 
       <h3 class="f-title">내가 치고 싶은 구질</h3>
       <div class="grid-view" id="shape-grid"></div>
       <p class="hint">고르면 그 구질에 맞는 그립·볼 위치·정렬 가이드가 생기고, 진단 기준도 그쪽으로 살짝 옮겨집니다.
-        상단 <b>🎯 구질</b> 버튼에서 언제든 다시 볼 수 있습니다.</p>
+        위 <b>🎯 구질</b>에서 언제든 다시 볼 수 있습니다.</p>
 
-      <details class="mydist" id="mydist">
-        <summary>📋 내 클럽 거리 <span id="mydist-sum"></span></summary>
-        <div class="mydist-b">
-          <p>여기에 내 캐리 거리를 넣어두면, 장비 화면에서 "아마추어 평균 대비"가 아니라
-            <b>내 기준 대비</b>로 비교합니다. 헤드 스피드 추정도 내 숫자로 계산합니다.
+      <details class="fold"><summary>⚙️ 세부 설정 <span id="opt-sum"></span></summary>
+        <div class="fold-b">
+          <h4 class="f-sub">손잡이</h4>
+          <div class="seg" id="hand-seg">
+            <button type="button" data-h="right" class="on">오른손잡이</button>
+            <button type="button" data-h="left">왼손잡이</button>
+          </div>
+          <p class="hint">자동 관절 인식에서 앞쪽/뒤쪽 어깨를 가를 때만 씁니다.</p>
+
+          <h4 class="f-sub">판정 민감도</h4>
+          <div class="seg" id="sens-seg">
+            <button type="button" data-v="strict">엄격</button>
+            <button type="button" data-v="normal" class="on">보통</button>
+            <button type="button" data-v="lenient">관대</button>
+          </div>
+          <p class="hint">엄격은 프로 기준에 가깝게, 관대는 아마추어 허용치를 넓게 봅니다.</p>
+
+          <h4 class="f-sub">내 클럽 거리 <span id="mydist-sum"></span></h4>
+          <p class="hint">넣어두면 장비 화면이 "아마추어 평균"이 아니라 <b>내 기준</b>으로 비교합니다.
             비워두면 평균값을 씁니다.</p>
           <div id="mydist-grid"></div>
-          <p class="hint">기록 화면에서 결과를 쌓으면 실제 기록의 중앙값으로 채워 넣을 수 있습니다.</p>
+
+          <h4 class="f-sub">기록 백업</h4>
+          <p class="hint">기록은 이 브라우저 안에만 있습니다. 폰을 바꾸거나 사이트 데이터를 지우면 사라집니다.</p>
+          <div class="lbackup-btns">
+            <button type="button" class="mini" id="log-export">⬇ 내보내기</button>
+            <button type="button" class="mini" id="log-import">⬆ 가져오기</button>
+            <button type="button" class="mini" id="log-fill">📋 거리 자동채우기</button>
+          </div>
+          <input type="file" id="log-file" accept="application/json,.json" hidden />
         </div>
       </details>
 
-      <h3 class="f-title">손잡이</h3>
-      <div class="seg" id="hand-seg">
-        <button type="button" data-h="right" class="on">오른손잡이</button>
-        <button type="button" data-h="left">왼손잡이</button>
-      </div>
-      <p class="hint">자동 관절 인식에서 앞쪽/뒤쪽 어깨를 가를 때만 씁니다. 직접 찍을 때는 쓰이지 않습니다.</p>
-
-      <h3 class="f-title">판정 민감도</h3>
-      <div class="seg" id="sens-seg">
-        <button type="button" data-v="strict">엄격</button>
-        <button type="button" data-v="normal" class="on">보통</button>
-        <button type="button" data-v="lenient">관대</button>
-      </div>
-      <p class="hint">엄격은 프로 기준에 가깝게, 관대는 아마추어 허용치를 넓게 봅니다.</p>
-
-      <div class="install" id="install-card" hidden>
-        <div class="install-h">📲 바탕화면에 바로가기 만들기</div>
+      <details class="fold install" id="install-card" hidden>
+        <summary>📲 바탕화면에 바로가기 만들기</summary>
+        <div class="fold-b">
         <p>연습장에서 주소창 없이 아이콘 하나로 바로 엽니다. 화면도 넓어져 영상 구간 잡기가 수월해집니다.</p>
         <button type="button" class="cta install-btn" id="install-btn">바탕화면에 추가</button>
         <details id="install-steps"><summary>버튼이 안 눌리거나 안 보이면 <span>직접 하는 법</span></summary>
           <div id="install-steps-b"></div>
         </details>
-      </div>
+        </div>
+      </details>
 
       <button class="cta" id="go-video" type="button">영상 올리기 ›</button>
     </section>
@@ -118,13 +127,17 @@
     <section class="screen" id="s-video" hidden>
       <h2 class="s-title">② 스윙 영상을 올려주세요</h2>
       <p class="s-lead">영상은 이 기기 안에서만 처리됩니다. 어디에도 올라가지 않습니다.</p>
-      <label class="drop" id="drop">
-        <input type="file" id="file" accept="video/*" hidden />
+      <label class="drop" for="file">
+        <input type="file" id="file" class="sr-only"
+               accept="video/*,video/mp4,video/quicktime,.mp4,.mov,.m4v" />
         <span class="drop-ico">🎬</span>
         <span class="drop-t">영상 파일 선택</span>
         <span class="drop-s">MP4 · MOV · 60fps 이상 권장</span>
       </label>
-      <div class="guide-box" id="shoot-guide-2"></div>
+      <p class="vstat" id="vstat" hidden></p>
+      <details class="fold"><summary>📷 촬영 가이드</summary>
+        <div class="guide-box" id="shoot-guide-2"></div>
+      </details>
     </section>
 
     <!-- 3. 키프레임 지정 + 관절 마킹 -->
@@ -164,14 +177,13 @@
         <p class="auto-note" id="auto-note" hidden></p>
         <div class="mark-btns">
           <button type="button" class="mini auto" id="mark-auto">🤖 자동으로 찍기</button>
-          <button type="button" class="mini" id="mark-undo">↺ 한 점 취소</button>
+          <button type="button" class="mini" id="mark-undo">한 점 취소</button>
           <button type="button" class="mini" id="mark-copy">이전 구간에서 복사</button>
           <button type="button" class="mini" id="mark-clear">전체 지우기</button>
           <button type="button" class="mini prim" id="mark-done">완료</button>
         </div>
       </div>
 
-      <button class="cta" id="go-report" type="button" disabled>분석 결과 보기 ›</button>
       <p class="hint" id="mark-need"></p>
     </section>
 
@@ -202,10 +214,10 @@
 
       <h3 class="f-title">이 클럽 평균 캐리 거리</h3>
       <div class="carry">
-        <input type="number" id="carry" inputmode="numeric" placeholder="예: 200" min="10" max="400" />
-        <span>야드</span>
+        <input type="number" id="carry" inputmode="numeric" placeholder="예: 180" min="10" max="350" />
+        <span>미터</span>
       </div>
-      <p class="hint">캐리(공중에 떠서 간 거리)를 넣으면 헤드 스피드와 샤프트 강도를 추정합니다. 모르면 비워두세요.</p>
+      <p class="hint">캐리(공중에 떠서 간 거리, 미터)를 넣으면 헤드 스피드와 샤프트 강도를 추정합니다. 모르면 비워두세요.</p>
 
       <button class="cta" id="go-fitresult" type="button">장비 세팅 제안 보기 ›</button>
       <div id="fitreport"></div>
@@ -239,10 +251,24 @@
 
   </main>
 
+  <!-- 화면에 고정되는 분석 버튼. .screen 안에 두면 등장 애니메이션의 transform 때문에
+       position:fixed 가 화면이 아니라 그 화면 상자를 기준으로 잡혀 아래로 밀려난다. -->
+  <div class="stickybar" id="stickybar">
+    <span class="sb-prog" id="sb-prog"></span>
+    <button class="sb-btn" id="go-report" type="button" disabled>분석 결과 보기 ›</button>
+  </div>
+
   <footer class="ft">
-    <p><strong>스윙자로가 하는 일과 하지 않는 일.</strong> 휴대폰 영상 한 대로 관절 위치를 재서 각도와 비율을 계산합니다(<strong>2D 추정</strong>). 그 값을 코칭에서 흔히 쓰는 범위와 비교해 벗어난 구간을 알려줍니다.</p>
-    <p><strong>하지 않는 일:</strong> 볼을 보지 않습니다. 그래서 "이렇게 고치면 더 멀리·똑바로 간다"를 이 앱이 검증한 것이 아닙니다. 솔루션과 장비 제안은 일반 통념이며, 실제 스윙 데이터로 학습하거나 결과로 검증한 값이 아닙니다. 통증이 있는 동작은 반드시 전문가와 상의하세요.</p>
-    <p class="ft-links">영상·좌표·기록은 전부 이 기기 안에만 있습니다. 아무 데도 올라가지 않습니다.</p>
+    <details class="fold ftfold"><summary>ℹ️ 이 앱이 하는 일 · 하지 않는 일</summary>
+      <div class="fold-b">
+        <p><b>하는 일</b> — 휴대폰 영상 한 대로 관절 위치를 재서 각도와 비율을 계산합니다(<b>2D 추정</b>).
+          그 값을 코칭에서 흔히 쓰는 범위와 비교해 벗어난 구간을 알려줍니다.</p>
+        <p><b>하지 않는 일</b> — 볼을 보지 않습니다. 그래서 "이렇게 고치면 더 멀리·똑바로 간다"를
+          이 앱이 검증한 것이 아닙니다. 솔루션과 장비 제안은 일반 통념이며, 실제 스윙 데이터로
+          학습하거나 결과로 검증한 값이 아닙니다. 통증이 있는 동작은 반드시 전문가와 상의하세요.</p>
+        <p>영상·좌표·기록은 전부 이 기기 안에만 있습니다. 아무 데도 올라가지 않습니다.</p>
+      </div>
+    </details>
   </footer>
 </div>
 

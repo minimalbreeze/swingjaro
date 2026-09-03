@@ -34,21 +34,27 @@ body{
 }
 #app{max-width:760px;margin:0 auto;padding:0 0 40px}
 
-/* ── 헤더 ─────────────────────────────────────────── */
+/* ── 헤더 ─────────────────────────────────────────────
+   좁은 폰에서 제목과 버튼이 두 줄로 깨지던 문제를 없앤다.
+   제목 한 줄 + 가로 스크롤되는 내비게이션 한 줄, 모두 nowrap. */
 .hd{position:sticky;top:0;z-index:20;background:linear-gradient(135deg,var(--teal),var(--teal2));
-  color:#fff;padding:calc(10px + var(--safe-top)) 16px 0;box-shadow:0 2px 14px rgba(31,92,80,.22)}
-.hd-in{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.hd h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.3px}
-.hd-sub{font-size:12px;font-weight:600;opacity:.75;margin-left:6px}
-.hd-btn{background:rgba(255,255,255,.16);border:0;color:#fff;font-size:12.5px;font-weight:700;
-  padding:7px 12px;border-radius:999px;cursor:pointer}
-.steps{display:flex;list-style:none;margin:10px 0 0;padding:0 0 8px;gap:4px;overflow-x:auto;
-  scrollbar-width:none}
-.steps::-webkit-scrollbar{display:none}
-.steps li{flex:0 0 auto;font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:999px;
-  background:rgba(255,255,255,.14);opacity:.62;white-space:nowrap}
-.steps li.on{background:#fff;color:var(--teal);opacity:1}
-.steps li.done{background:rgba(255,255,255,.3);opacity:.9}
+  color:#fff;padding:calc(8px + var(--safe-top)) 0 0;box-shadow:0 2px 14px rgba(31,92,80,.22)}
+.hd-in{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px}
+.hd h1{margin:0;font-size:18px;font-weight:800;letter-spacing:-.3px;white-space:nowrap}
+/* 화살표 기호는 폰트에 따라 네모로 깨진다. 글자를 쓴다. */
+.hd-btn{flex:0 0 auto;background:rgba(255,255,255,.16);border:0;color:#fff;font-size:12.5px;
+  font-family:inherit;font-weight:700;padding:7px 13px;line-height:1;border-radius:999px;
+  cursor:pointer;white-space:nowrap}
+
+.nav{display:flex;align-items:center;gap:5px;padding:8px 14px 9px;overflow-x:auto;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.nav::-webkit-scrollbar{display:none}
+.nv{flex:0 0 auto;white-space:nowrap;border:0;cursor:pointer;font-family:inherit;
+  font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:999px;
+  background:rgba(255,255,255,.15);color:rgba(255,255,255,.82)}
+.nv.on{background:#fff;color:var(--teal)}
+.nv.tool{background:rgba(255,255,255,.09);color:rgba(255,255,255,.92)}
+.nv-sep{flex:0 0 auto;width:1px;height:18px;background:rgba(255,255,255,.25);margin:0 3px}
 
 /* ── 화면 공통 ───────────────────────────────────── */
 main{padding:18px 16px 0}
@@ -149,7 +155,8 @@ main{padding:18px 16px 0}
 .score-n{font-size:40px;font-weight:900;line-height:1;letter-spacing:-2px}
 .score-n small{font-size:15px;font-weight:800;opacity:.5}
 .score-t{flex:1}
-.score-t b{display:block;font-size:15px;margin-bottom:2px}
+.score-t>b{display:block;font-size:15px;margin-bottom:2px}
+.score-t span b{font-weight:800;color:var(--tx)}
 .score-t span{font-size:12.5px;color:var(--dim);word-break:keep-all}
 
 .phase{margin-bottom:20px}
@@ -226,10 +233,13 @@ main{padding:18px 16px 0}
   color:var(--dim);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
 .legend i::before{content:'';width:14px;height:3px;border-radius:2px;background:var(--sw,#999)}
 
-/* ── 푸터 ─────────────────────────────────────────── */
-.ft{margin:34px 16px 0;padding-top:16px;border-top:1px solid var(--line)}
-.ft p{font-size:12px;color:var(--dim);margin:0 0 6px;word-break:keep-all}
-.ft-links a{color:var(--teal);font-weight:700}
+/* ── 푸터 ─────────────────────────────────────────────
+   모든 화면 끝에 붙는 글이라 펼쳐 두면 스크롤만 길어진다. 접어 둔다. */
+.ft{margin:28px 16px 0}
+.ftfold{margin:0}
+.ftfold>summary{font-size:12.5px;font-weight:700;color:var(--dim)}
+.ftfold .fold-b p{font-size:12px;color:var(--dim);margin:10px 0 0;word-break:keep-all;line-height:1.7}
+.ftfold .fold-b p b{color:var(--tx)}
 
 @media (min-width:640px){
   .stage{margin-left:0;margin-right:0}
@@ -410,3 +420,59 @@ main{padding:18px 16px 0}
 .ist b{display:block;font-size:13.5px;font-weight:800;color:var(--teal);margin-bottom:2px}
 .ist>p{font-size:12.5px;color:var(--dim);margin:0 0 9px;word-break:keep-all}
 .ist .steps-num li{font-size:13.3px;margin-bottom:6px}
+
+/* ── 접이식 구역 ─────────────────────────────────────
+   화면 하나가 폰에서 끝없이 길어지지 않도록, 자주 안 여는 것은 접어 둔다. */
+.fold{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:16px 0}
+.fold>summary{list-style:none;cursor:pointer;padding:13px 16px;font-size:14px;font-weight:800;
+  color:var(--teal);display:flex;align-items:center;gap:8px}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::after{content:'▾';margin-left:auto;font-size:12px;opacity:.55;transition:transform .2s}
+.fold[open]>summary::after{transform:rotate(180deg)}
+.fold>summary span{font-size:11.5px;font-weight:700;color:var(--dim);background:#eef4f1;
+  border-radius:999px;padding:3px 9px;white-space:nowrap}
+.fold-b{padding:2px 16px 14px;border-top:1px solid var(--line)}
+.fold .guide-box{margin:0;border:0;border-left:4px solid var(--mint);border-radius:0 12px 12px 0}
+.fold .mtable{margin-bottom:0}
+.f-sub{font-size:13px;font-weight:800;color:var(--teal);margin:15px 0 7px}
+.fold-b>.hint{margin-bottom:9px}
+
+/* 화면에서만 감춘다. hidden 인 input 은 못 여는 브라우저가 있다. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+.vstat{font-size:13px;line-height:1.6;margin:12px 0 0;padding:11px 13px;border-radius:11px;
+  background:#f1f6f3;color:var(--dim);word-break:keep-all}
+.vstat.bad{background:#fdecea;color:#9c3b32}
+
+/* ── 분석 버튼 고정 바 ───────────────────────────────
+   구간 지정 화면이 길어서 버튼이 화면 밖으로 밀려 안 보이던 문제. */
+/* sticky 로는 화면 위쪽에 있을 때 바가 안 보인다. 화면에 고정한다. */
+.stickybar{position:fixed;left:0;right:0;bottom:0;z-index:15;display:none;align-items:center;gap:10px;
+  max-width:760px;margin:0 auto;padding:10px 16px calc(10px + var(--safe-bottom));
+  background:rgba(243,247,244,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line);
+  box-shadow:0 -4px 18px rgba(31,92,80,.08)}
+.stickybar.show{display:flex}
+/* 고정 바에 내용이 가리지 않도록 아래 여백을 준다 */
+#s-mark:not([hidden]){padding-bottom:84px}
+.sb-prog{flex:1;font-size:11.5px;line-height:1.45;color:var(--dim);word-break:keep-all}
+.sb-prog b{display:block;font-size:14px;color:var(--teal)}
+.stickybar.ready .sb-prog b{color:var(--ok)}
+.sb-btn{flex:0 0 auto;border:0;border-radius:13px;padding:13px 18px;font-size:15px;font-weight:800;
+  font-family:inherit;color:#fff;cursor:pointer;
+  background:linear-gradient(135deg,var(--coral),var(--gold));box-shadow:0 4px 14px rgba(255,145,102,.3)}
+.sb-btn:disabled{background:#c9d6d0;box-shadow:none;cursor:not-allowed}
+
+/* 좁은 화면에서 클럽 타일이 세 개씩 들어가 글자가 눌리던 것 완화 */
+@media (max-width:400px){
+  .grid-club{grid-template-columns:repeat(2,1fr)}
+  .hd h1{font-size:17px}
+}
+/* 설치 카드는 접이식이지만 눈에 띄어야 해서 색만 유지한다 */
+.fold.install{background:linear-gradient(135deg,rgba(183,121,239,.1),rgba(255,143,179,.1));
+  border-color:rgba(183,121,239,.35)}
+.fold.install>summary{color:var(--purple)}
+.fold.install>.fold-b{border-top-color:rgba(183,121,239,.25)}
+.fold.install .cta.install-btn{margin:10px 0}
+.fold.ocard{border-left:4px solid var(--purple)}
+.fold.ocard>summary{color:var(--purple)}
