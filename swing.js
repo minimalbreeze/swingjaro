@@ -31,6 +31,7 @@
     rhythm: null,      // 리듬·템포
     overlay: 'step',   // 선 보기: step(이 단계만) · all(전부) · off(끔)
     zoom: null,        // 영상 확대 배율·중심
+    fit: 'contain',    // 가로 영상은 세로 상자에 채우고(cover) 좌우를 자른다
     profile: { carries: {} },   // 내 기준 거리
     shape: 'draw',              // 내가 치고 싶은 구질
     askOpen: null,              // 펼쳐놓은 증상
@@ -317,8 +318,25 @@
     el.video.src = S.videoURL;
     el.video.load();
   });
+  /* 가로로 찍은 영상은 세로 폰에서 얇은 띠가 되어 자세가 안 보인다.
+   * 세로 상자에 꽉 채우고(cover) 좌우를 잘라 낸다. 세로 영상은 그대로 다 보여준다. */
+  function fitStage() {
+    var vw = el.video.videoWidth, vh = el.video.videoHeight;
+    if (!vw || !vh) return;
+    if (vw / vh > 1.05) {
+      S.fit = 'cover';
+      el.stage.style.aspectRatio = '3 / 4';
+    } else {
+      S.fit = 'contain';
+      el.stage.style.aspectRatio = vw + ' / ' + vh;
+    }
+    el.video.style.objectFit = S.fit;
+    fitCanvas();
+  }
+
   el.video.addEventListener('loadedmetadata', function () {
     vstat('');
+    fitStage();
     S.duration = el.video.duration || 0;
     var on = el['rate-seg'].querySelector('.on');
     el.video.playbackRate = on ? +on.dataset.r : 0.25;
@@ -669,7 +687,9 @@
   function box() {
     var cw = el.canvas.clientWidth, ch = el.canvas.clientHeight;
     var vw = el.video.videoWidth || 16, vh = el.video.videoHeight || 9;
-    var s = Math.min(cw / vw, ch / vh);
+    // 채움(cover)은 큰 쪽에 맞춰 넘치게, 맞춤(contain)은 작은 쪽에 맞춰 여백을 둔다.
+    // 여기를 안 맞추면 잘라낸 만큼 선이 통째로 어긋난다.
+    var s = S.fit === 'cover' ? Math.max(cw / vw, ch / vh) : Math.min(cw / vw, ch / vh);
     var w = vw * s, h = vh * s;
     return { x: (cw - w) / 2, y: (ch - h) / 2, w: w, h: h };
   }
@@ -924,10 +944,17 @@
     S.viewFrame = S.report.framesUsed.indexOf('P7') >= 0 ? 'P7' : S.report.framesUsed[0];
     buildFlow(); buildSeekMarks(); renderStepDetail();
     S.stepPick = false;
-    computeZoom(); applyZoom(true);
     seekTo(S.frames[S.viewFrame].t);
     show('report');
-    requestAnimationFrame(function () { fitCanvas(); draw(); });
+    // 확대 배율은 화면에 실제로 그려진 크기를 재서 정한다. 그래서 화면을
+    // 띄우고 캔버스를 맞춘 다음에 계산해야 한다. 순서가 바뀌면 크기가 0이라
+    // 확대가 아예 안 걸린다.
+    requestAnimationFrame(function () {
+      fitCanvas();
+      computeZoom();
+      applyZoom(true);
+      fitCanvas();
+    });
   }
 
   /* ── 확대 · 선 보기 ────────────────────────────────────────────
@@ -957,10 +984,15 @@
     var mx = (x1 - x0) * 0.42 + 0.05, my = (y1 - y0) * 0.18 + 0.04;
     x0 = Math.max(0, x0 - mx); x1 = Math.min(1, x1 + mx);
     y0 = Math.max(0, y0 - my); y1 = Math.min(1, y1 + my);
-    var w = x1 - x0, h2 = y1 - y0;
-    if (w <= 0.02 || h2 <= 0.02) return;
-    var k2 = Math.min(1 / w, 1 / h2);
-    if (k2 < 1.15) return;                 // 이미 꽉 차 있으면 굳이 키우지 않는다
+    if (x1 - x0 <= 0.02 || y1 - y0 <= 0.02) return;
+    // 잘라낸 뒤 화면에 실제로 보이는 크기 기준으로 배율을 잡는다.
+    var cw = el.canvas.clientWidth, ch = el.canvas.clientHeight;
+    if (!cw || !ch) return;
+    var q0 = toPx({ x: x0, y: y0 }), q1 = toPx({ x: x1, y: y1 });
+    var bw = Math.abs(q1.x - q0.x), bh = Math.abs(q1.y - q0.y);
+    if (bw < 4 || bh < 4) return;
+    var k2 = Math.min(cw / bw, ch / bh);
+    if (k2 < 1.12) return;                 // 이미 꽉 차 있으면 굳이 키우지 않는다
     S.zoom = { k: Math.min(k2, 2.6), cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
   }
   function applyZoom(on) {
@@ -971,7 +1003,11 @@
       el['t-zoom'].classList.remove('on');
       return;
     }
-    el['stage-zoom'].style.transformOrigin = (z.cx * 100).toFixed(1) + '% ' + (z.cy * 100).toFixed(1) + '%';
+    // 확대 중심은 화면 안에서의 위치로 잡아야 한다(영상 좌표가 아니라).
+    var c = toPx({ x: z.cx, y: z.cy });
+    var ow = el.canvas.clientWidth || 1, oh = el.canvas.clientHeight || 1;
+    el['stage-zoom'].style.transformOrigin =
+      (c.x / ow * 100).toFixed(1) + '% ' + (c.y / oh * 100).toFixed(1) + '%';
     el['stage-zoom'].style.transform = 'scale(' + z.k.toFixed(3) + ')';
     el['t-zoom'].classList.add('on');
   }

@@ -107,8 +107,10 @@ main{padding:18px 16px 0}
 .screen.wide{padding:0}
 .screen.wide .s-title,.screen.wide .cta,.screen.wide .hint,.screen.wide #report{margin-left:0;margin-right:0}
 .stage{background:#0e1a17;border-radius:16px;overflow:hidden;margin:0 0 10px;position:relative;scroll-margin-top:96px}
-.stage-in{position:relative;width:100%;display:block;line-height:0}
-#video{width:100%;height:auto;display:block;max-height:62vh;object-fit:contain;background:#0e1a17}
+.stage-in{position:relative;width:100%;height:100%;display:block;line-height:0}
+/* 가로 영상은 세로 상자에 채워 넣는다(비율은 JS가 영상에 맞춰 정한다).
+   가로로 찍은 영상을 그대로 두면 세로 폰에서 얇은 띠가 되어 자세가 안 보인다. */
+#video{width:100%;height:100%;display:block;object-fit:contain;background:#0e1a17}
 #canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
 .stage-badge{position:absolute;left:10px;top:10px;background:rgba(14,26,23,.72);color:#fff;
   font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:999px;line-height:1.4;
@@ -243,7 +245,7 @@ main{padding:18px 16px 0}
 
 @media (min-width:640px){
   .stage{margin-left:0;margin-right:0}
-  #video{max-height:66vh}
+
 }
 
 /* ── 근거 표시 ────────────────────────────────────────
@@ -614,7 +616,7 @@ main{padding:18px 16px 0}
 
 /* ── 화면 크게 · 가림 줄이기 ──────────────────────────
    글씨가 영상을 덮어 정작 스윙이 안 보이던 문제. */
-#video{max-height:72vh}
+
 .stage-badge{left:8px;top:8px;font-size:12px;padding:5px 11px;max-width:60%;
   background:rgba(14,26,23,.6)}
 .stage{border-radius:14px}
@@ -667,8 +669,8 @@ main{padding:18px 16px 0}
 /* ── 확대 · 도구 · 범례 ───────────────────────────────
    광각으로 찍으면 사람이 작아 자세가 안 보인다. 관절 범위만큼 확대해 준다.
    영상과 캔버스를 같은 상자 안에서 함께 키우므로 선 위치는 그대로 맞는다. */
-.stage{position:relative;overflow:hidden}
-.stage-zoom{transition:transform .25s ease;will-change:transform}
+.stage{position:relative;overflow:hidden;width:100%;max-height:76vh}
+.stage-zoom{height:100%;transition:transform .25s ease;will-change:transform}
 .stage-tools{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px;z-index:3}
 .stool{width:38px;height:38px;border:0;border-radius:11px;cursor:pointer;font-size:17px;
   background:rgba(14,26,23,.55);color:#fff;backdrop-filter:blur(6px);line-height:1}
