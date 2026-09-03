@@ -29,6 +29,8 @@
     capturing: false,  // 썸네일 캡처 중 (사용자가 만지면 중단한다)
     track: null,       // 전 프레임 관절 — 재생하면 뼈대가 따라 움직인다
     rhythm: null,      // 리듬·템포
+    overlay: 'step',   // 선 보기: step(이 단계만) · all(전부) · off(끔)
+    zoom: null,        // 영상 확대 배율·중심
     profile: { carries: {} },   // 내 기준 거리
     shape: 'draw',              // 내가 치고 싶은 구질
     askOpen: null,              // 펼쳐놓은 증상
@@ -43,7 +45,7 @@
    'mark-clear','mark-done','go-report','mark-need','report','go-fit','flight-grid','traj-seg',
    'contact-seg','carry','go-fitresult','fitreport','btn-reset','main',
    'stage','studio','stage-slot-mark','stage-slot-report','report-flow',
-   'step-detail','seekmarks','flow-hint',
+   'step-detail','seekmarks','flow-hint','stage-zoom','stage-tools','t-zoom','t-line','keys',
    'hand-seg','mark-auto','auto-note','btn-log','logbox','outcome-slot',
    'mydist','mydist-sum','mydist-grid',
    'btn-shape','btn-ask','shape-grid','shape-seg','shapebox','ask-q','askbox',
@@ -74,6 +76,8 @@
     // 무대(영상+캔버스)는 하나뿐이라 필요한 화면으로 옮겨 붙인다.
     var slot = step === 'mark' ? el['stage-slot-mark']
              : step === 'report' ? el['stage-slot-report'] : null;
+    // 직접 찍는 화면에서는 확대를 끈다. 화면이 커지면 누른 자리와 실제 좌표가 어긋난다.
+    applyZoom(step === 'report' && el['t-zoom'].classList.contains('on'));
     if (step === 'mark') {
       el['mark-title'].textContent = S.autoUsed ? '구간 확인 · 손보기' : '③ 구간을 잡고 관절을 찍어주세요';
       el['mark-lead'].innerHTML = S.autoUsed
@@ -713,7 +717,15 @@
     if (!ctx) return;
     var cw = el.canvas.clientWidth, ch = el.canvas.clientHeight;
     ctx.clearRect(0, 0, cw, ch);
-    if (S.report && S.report.shapes) drawShapes(S.report.shapes);
+    if (S.report && S.report.shapes && S.overlay !== 'off') {
+      // 선을 한꺼번에 다 그리면 겹쳐서 뭐가 뭔지 알 수 없다.
+      // 기본은 "지금 보고 있는 단계에서 의미가 있는 선"만 그린다.
+      var vf = S.viewFrame;
+      drawShapes(S.report.shapes.filter(function (sh) {
+        if (S.overlay === 'all' || !sh.steps) return true;
+        return vf && sh.steps.indexOf(vf) >= 0;
+      }));
+    }
     drawSkeleton();
     drawHotspots();
     updateBadge();
@@ -733,13 +745,14 @@
         if (!fr.marks[j] || seen[j]) return;
         seen[j] = true;
         var p = toPx(fr.marks[j]);
-        var r = Math.max(13, Math.min(el.canvas.clientWidth, el.canvas.clientHeight) * 0.045);
+        var zk3 = zoomK();
+        var r = Math.max(13, Math.min(el.canvas.clientWidth, el.canvas.clientHeight) * 0.045) / zk3;
         ctx.save();
         ctx.strokeStyle = f.sev >= 3 ? '#e2574c' : f.sev === 2 ? '#e79a2b' : '#2f9e75';
-        ctx.lineWidth = 3.5;
+        ctx.lineWidth = 3 / zk3;
         ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
         ctx.globalAlpha = 0.28;
-        ctx.lineWidth = 9;
+        ctx.lineWidth = 8 / zk3;
         ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
         ctx.restore();
       });
@@ -756,6 +769,7 @@
       var lb = null;
       D.FRAMES.forEach(function (f) { if (f.id === S.viewFrame) lb = f; });
       el['stage-badge'].textContent = lb ? lb.emoji + ' ' + lb.label : '';
+      renderKeys();
       el['stage-badge'].style.display = '';
     } else {
       el['stage-badge'].style.display = 'none';
@@ -788,7 +802,8 @@
       : [['leadShoulder','trailShoulder'],['leadHip','trailHip'],['leadShoulder','leadHip'],
          ['trailShoulder','trailHip'],['head','leadShoulder'],['head','trailShoulder'],['hands','clubhead']];
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2;
+    var zk2 = zoomK();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.6 / zk2;
     links.forEach(function (L) {
       if (!marks[L[0]] || !marks[L[1]]) return;
       var a = toPx(marks[L[0]]), b = toPx(marks[L[1]]);
@@ -797,9 +812,9 @@
     neededFor(fid || S.viewFrame).forEach(function (j) {
       if (!marks[j.id]) return;
       var p = toPx(marks[j.id]);
-      ctx.beginPath(); ctx.arc(p.x, p.y, 6.5, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(p.x, p.y, 4.2 / zk2, 0, Math.PI * 2);
       ctx.fillStyle = j.color; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.stroke();
+      ctx.lineWidth = 1.4 / zk2; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.stroke();
     });
     ctx.restore();
   }
@@ -810,14 +825,19 @@
     return [{ x: a.x - v.x * 0.12, y: a.y - v.y * 0.12 }, { x: a.x + v.x * k, y: a.y + v.y * k }];
   }
 
+  // 지금 걸려 있는 확대 배율. 선 굵기를 이걸로 나눠 화면상 두께를 일정하게 둔다.
+  function zoomK() {
+    return (S.zoom && el['t-zoom'].classList.contains('on')) ? S.zoom.k : 1;
+  }
   function drawShapes(shapes) {
+    var zk = zoomK();
     ctx.save();
     // 선 아래 어두운 그림자를 깔아 밝은 잔디·조명 위에서도 읽히게 한다.
-    ctx.shadowColor = 'rgba(0,0,0,.55)';
-    ctx.shadowBlur = 4;
+    ctx.shadowColor = 'rgba(0,0,0,.5)';
+    ctx.shadowBlur = 2.5 / zk;
     shapes.forEach(function (sh) {
-      ctx.setLineDash(sh.dash || []);
-      ctx.lineWidth = sh.width || 2;
+      ctx.setLineDash((sh.dash || []).map(function (d) { return d / zk; }));
+      ctx.lineWidth = (sh.width || 2) / zk;
       ctx.strokeStyle = sh.color || '#fff';
       if (sh.type === 'line') {
         var e2 = extPts(toPx(sh.from), toPx(sh.to), sh.extend || 1.5);
@@ -837,9 +857,9 @@
         ctx.beginPath(); ctx.arc(c.x, c.y, sh.r * bb.h, 0, Math.PI * 2); ctx.stroke();
       } else if (sh.type === 'dot') {
         var d = toPx(sh.at);
-        ctx.beginPath(); ctx.arc(d.x, d.y, sh.r || 5, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(d.x, d.y, (sh.r || 5) / zk, 0, Math.PI * 2);
         ctx.fillStyle = sh.color; ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.5 / zk; ctx.stroke();
       } else if (sh.type === 'trace') {
         var key = sh.points[0], pts = [];
         D.FRAMES.forEach(function (f) {
@@ -892,9 +912,83 @@
     S.viewFrame = S.report.framesUsed.indexOf('P7') >= 0 ? 'P7' : S.report.framesUsed[0];
     buildFlow(); buildSeekMarks(); renderStepDetail();
     S.stepPick = false;
+    computeZoom(); applyZoom(true);
     seekTo(S.frames[S.viewFrame].t);
     show('report');
     requestAnimationFrame(function () { fitCanvas(); draw(); });
+  }
+
+  /* ── 확대 · 선 보기 ────────────────────────────────────────────
+   * 광각으로 찍으면 사람이 작게 나와 자세가 안 보인다. 관절이 차지하는
+   * 범위를 알고 있으니 그만큼 확대해 보여준다. 영상과 캔버스를 함께
+   * 키우므로 선 위치는 그대로 맞는다.
+   */
+  function computeZoom() {
+    S.zoom = null;
+    var pts = [];
+    var src = S.track && S.track.length ? S.track : null;
+    if (src) {
+      src.forEach(function (f) {
+        Object.keys(f.marks).forEach(function (k2) { if (f.marks[k2]) pts.push(f.marks[k2]); });
+      });
+    } else {
+      Object.keys(S.frames).forEach(function (fid) {
+        var m = S.frames[fid].marks;
+        Object.keys(m).forEach(function (k2) { if (m[k2]) pts.push(m[k2]); });
+      });
+    }
+    if (pts.length < 6) return;
+    var xs = pts.map(function (p) { return p.x; }), ys = pts.map(function (p) { return p.y; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+    var y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+    // 클럽이 몸 밖으로 크게 나가므로 넉넉히 여백을 둔다
+    var mx = (x1 - x0) * 0.42 + 0.05, my = (y1 - y0) * 0.18 + 0.04;
+    x0 = Math.max(0, x0 - mx); x1 = Math.min(1, x1 + mx);
+    y0 = Math.max(0, y0 - my); y1 = Math.min(1, y1 + my);
+    var w = x1 - x0, h2 = y1 - y0;
+    if (w <= 0.02 || h2 <= 0.02) return;
+    var k2 = Math.min(1 / w, 1 / h2);
+    if (k2 < 1.15) return;                 // 이미 꽉 차 있으면 굳이 키우지 않는다
+    S.zoom = { k: Math.min(k2, 2.6), cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+  }
+  function applyZoom(on) {
+    var z = S.zoom;
+    if (!z || !on) {
+      el['stage-zoom'].style.transform = '';
+      el['stage-zoom'].style.transformOrigin = '';
+      el['t-zoom'].classList.remove('on');
+      return;
+    }
+    el['stage-zoom'].style.transformOrigin = (z.cx * 100).toFixed(1) + '% ' + (z.cy * 100).toFixed(1) + '%';
+    el['stage-zoom'].style.transform = 'scale(' + z.k.toFixed(3) + ')';
+    el['t-zoom'].classList.add('on');
+  }
+  function setZoom(on) { applyZoom(on); draw(); }
+  el['t-zoom'].addEventListener('click', function () {
+    if (!S.zoom) { computeZoom(); }
+    setZoom(!this.classList.contains('on'));
+  });
+  el['t-line'].addEventListener('click', function () {
+    // 이 단계만 → 전부 → 끔 → 이 단계만
+    S.overlay = S.overlay === 'step' ? 'all' : S.overlay === 'all' ? 'off' : 'step';
+    this.classList.toggle('on', S.overlay !== 'off');
+    this.textContent = S.overlay === 'all' ? '📐＋' : '📐';
+    draw();
+  });
+
+  /* 지금 화면에 그려진 선이 무엇인지 영상 아래에 짧게 적어 준다.
+   * 색만 봐서는 무슨 선인지 알 수 없다. */
+  function renderKeys() {
+    if (!S.report || S.overlay === 'off') { el.keys.innerHTML = ''; return; }
+    var vf = S.viewFrame;
+    var seen = {}, out = [];
+    S.report.shapes.forEach(function (sh) {
+      if (!sh.label || seen[sh.label]) return;
+      if (S.overlay !== 'all' && sh.steps && (!vf || sh.steps.indexOf(vf) < 0)) return;
+      seen[sh.label] = 1;
+      out.push('<i style="--c:' + (sh.color || '#fff') + '">' + esc(sh.label) + '</i>');
+    });
+    el.keys.innerHTML = out.join('');
   }
 
   /* 각 단계의 실제 영상 장면을 작은 그림으로 떠 둔다.
@@ -966,7 +1060,7 @@
     el['report-flow'].innerHTML = have.map(function (f) {
       var fl = faultsOfStep(f.id);
       var sev = fl.reduce(function (m, x) { return Math.max(m, x.sev); }, 0);
-      var shot = silhouette(f.id, !fl.length) ||
+      var shot = window.SwingIcons.icon(f.id, !fl.length) ||
         '<span class="shot em">' + f.emoji + '</span>';
       return '<button type="button" class="step' + (S.viewFrame === f.id ? ' sel' : '') +
         (fl.length ? ' bad s' + sev : ' good') + '" data-view-frame="' + f.id + '">' +

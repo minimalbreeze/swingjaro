@@ -50,12 +50,19 @@
     <!-- 이동식 스튜디오: 영상 + 재생 조작. 필요한 화면으로 옮겨 붙인다. -->
     <div id="studio">
       <div class="stage" id="stage">
-        <div class="stage-in" id="stage-in">
-          <video id="video" playsinline preload="auto" muted></video>
-          <canvas id="canvas"></canvas>
-          <div class="stage-badge" id="stage-badge"></div>
+        <div class="stage-zoom" id="stage-zoom">
+          <div class="stage-in" id="stage-in">
+            <video id="video" playsinline preload="auto" muted></video>
+            <canvas id="canvas"></canvas>
+          </div>
+        </div>
+        <div class="stage-badge" id="stage-badge"></div>
+        <div class="stage-tools" id="stage-tools">
+          <button type="button" class="stool" id="t-zoom" title="확대">🔍</button>
+          <button type="button" class="stool on" id="t-line" title="가이드 선">📐</button>
         </div>
       </div>
+      <div class="keys" id="keys"></div>
 
       <div class="scrub">
         <div class="seekwrap">
@@ -307,6 +314,7 @@
 <script src="swing-pose.js"></script>
 <script src="swing-auto.js"></script>
 <script src="swing-install.js"></script>
+<script src="swing-icons.js"></script>
 <script src="swing-shot.js"></script>
 <script src="swing-log.js"></script>
 <script src="swing.js"></script>
