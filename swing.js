@@ -25,6 +25,8 @@
     report: null,
     lastRecordId: null,   // 방금 분석한 회차 — 결과를 여기에 붙인다
     logFilter: null, logMode: 'carry',
+    stepPick: false,   // 단계를 눌러 고른 상태 — 재생/스크럽 전까지 유지한다
+    capturing: false,  // 썸네일 캡처 중 (사용자가 만지면 중단한다)
     profile: { carries: {} },   // 내 기준 거리
     shape: 'draw',              // 내가 치고 싶은 구질
     askOpen: null,              // 펼쳐놓은 증상
@@ -405,6 +407,7 @@
   }
   el.seek.addEventListener('input', function () {
     el.video.pause();
+    S.stepPick = false; S.capturing = false;
     seekTo((this.value / 1000) * S.duration);
   });
   el.video.addEventListener('timeupdate', syncTime);
@@ -418,7 +421,9 @@
       // 안 그러면 직전에 골라둔 칩이 켜진 채로 남는다.
       var st = stepAt(t);
       litFlow(st);
-      if (st && st !== S.viewFrame && el.video.paused) {
+      // 눌러서 고른 단계는 유지한다. 그렇지 않으면 되감기 스냅 때문에
+      // 방금 고른 단계가 바로 이전 단계로 튕긴다.
+      if (!S.stepPick && st && st !== S.viewFrame && el.video.paused) {
         S.viewFrame = st; buildFlow(); renderStepDetail(); draw();
       }
     }
@@ -426,10 +431,12 @@
   document.querySelectorAll('[data-nudge]').forEach(function (b) {
     b.addEventListener('click', function () {
       el.video.pause();
+      S.stepPick = false; S.capturing = false;
       seekTo(el.video.currentTime + (+this.dataset.nudge) / FPS);
     });
   });
   el.play.addEventListener('click', function () {
+    S.stepPick = false; S.capturing = false;
     if (el.video.paused) { el.video.play(); this.textContent = '❚❚ 일시정지'; }
     else { el.video.pause(); this.textContent = '▶ 재생'; }
   });
@@ -843,12 +850,11 @@
     renderOutcomeForm();
     S.viewFrame = S.report.framesUsed.indexOf('P7') >= 0 ? 'P7' : S.report.framesUsed[0];
     buildFlow(); buildSeekMarks(); renderStepDetail();
+    S.stepPick = false;
     captureThumbs(function () {
       buildFlow();
-      seekTo(S.frames[S.viewFrame].t);
-      draw();
+      if (!S.stepPick) { seekTo(S.frames[S.viewFrame].t); draw(); }
     });
-    seekTo(S.frames[S.viewFrame].t);
     show('report');
     requestAnimationFrame(function () { fitCanvas(); draw(); });
   }
@@ -863,8 +869,10 @@
     var W = 132, H = Math.round(W * vh / vw);
     cv.width = W; cv.height = H;
     var i = 0;
+    S.capturing = true;
     function step() {
-      if (i >= ids.length) { done && done(); return; }
+      // 사용자가 단계를 누르거나 재생하면 캡처를 접는다. 영상 위치를 뺏으면 안 된다.
+      if (!S.capturing || i >= ids.length) { S.capturing = false; done && done(); return; }
       var id = ids[i];
       var fired = false;
       function grab() {
@@ -898,7 +906,8 @@
     var cur = null;
     D.FRAMES.forEach(function (f) {
       var fr = S.frames[f.id];
-      if (fr && isReady(f.id) && fr.t <= t + 0.001) cur = f.id;
+      // 여유 0.04초. 브라우저가 요청 시각보다 한두 프레임 앞으로 스냅하는 것을 감안한다.
+      if (fr && isReady(f.id) && fr.t <= t + 0.04) cur = f.id;
     });
     return cur;
   }
@@ -942,12 +951,17 @@
     h.push('</div>');
     el['step-detail'].innerHTML = h.join('');
   }
+  function gotoStep(fid) {
+    S.capturing = false;          // 캡처가 돌고 있으면 접는다
+    el.video.pause();             // 그 장면에서 멈춘다
+    S.stepPick = true;            // 재생/스크럽 전까지 이 단계를 지킨다
+    S.viewFrame = fid;
+    seekTo(S.frames[fid].t);
+    buildFlow(); renderStepDetail(); draw();
+  }
   el['report-flow'].addEventListener('click', function (e) {
     var b = e.target.closest('[data-view-frame]'); if (!b) return;
-    el.video.pause();
-    S.viewFrame = b.dataset.viewFrame;
-    seekTo(S.frames[S.viewFrame].t);
-    buildFlow(); renderStepDetail(); draw();
+    gotoStep(b.dataset.viewFrame);
   });
   // 타임라인에 구간 위치를 표시한다
   function buildSeekMarks() {
@@ -1223,10 +1237,7 @@
     if (e.target.id === 'rep-fix') { show('mark'); return; }
     var go = e.target.closest('[data-goto]');
     if (go) {
-      el.video.pause();
-      S.viewFrame = go.dataset.goto;
-      seekTo(S.frames[S.viewFrame].t);
-      buildFlow(); renderStepDetail(); draw();
+      gotoStep(go.dataset.goto);
       el['report-flow'].scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
