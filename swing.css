@@ -611,3 +611,55 @@ main{padding:18px 16px 0}
 .practice .cta{margin:0;padding:14px;font-size:15.5px;
   background:linear-gradient(135deg,var(--purple),var(--pink));
   box-shadow:0 5px 16px rgba(183,121,239,.3)}
+
+/* ── 화면 크게 · 가림 줄이기 ──────────────────────────
+   글씨가 영상을 덮어 정작 스윙이 안 보이던 문제. */
+#video{max-height:72vh}
+.stage-badge{left:8px;top:8px;font-size:12px;padding:5px 11px;max-width:60%;
+  background:rgba(14,26,23,.6)}
+.stage{border-radius:14px}
+
+/* ── 단계 칩: 뼈대 실루엣 ──────────────────────────── */
+.step .sil{display:block;width:100%;aspect-ratio:3/4;border-radius:9px;
+  background:#f1f6f3;margin-bottom:6px}
+.step.bad .sil{background:#fdecea}
+.step.sel .sil{background:#e7f2ee}
+
+/* ── 리듬·템포 ────────────────────────────────────── */
+.rhythm{background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:15px 17px;margin-bottom:12px;border-left:5px solid var(--dim)}
+.rhythm.ok{border-left-color:var(--ok)}
+.rhythm.warn{border-left-color:var(--warn)}
+.rhythm.bad{border-left-color:var(--bad)}
+.rh-top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:11px}
+.rh-k{display:block;font-size:11.5px;font-weight:800;color:var(--dim);letter-spacing:.3px}
+.rh-n{display:block;font-size:34px;font-weight:900;letter-spacing:-1.5px;line-height:1.05;
+  color:var(--teal);font-variant-numeric:tabular-nums}
+.rh-n em{font-style:normal;font-size:17px;font-weight:800;opacity:.65}
+.rhythm.ok .rh-n{color:var(--ok)}
+.rhythm.warn .rh-n{color:var(--warn)}
+.rhythm.bad .rh-n{color:var(--bad)}
+.rh-v{text-align:right;font-size:13.5px;font-weight:800;flex:0 0 auto}
+.rh-v span{display:block;font-size:11px;font-weight:700;color:var(--dim);margin-top:2px}
+.rh-bar{display:flex;height:30px;border-radius:9px;overflow:hidden;margin-bottom:9px}
+.rh-bar i{display:flex;align-items:center;justify-content:center;font-style:normal;
+  font-size:11.5px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden}
+.rh-bar .b{background:linear-gradient(135deg,var(--teal),var(--teal2))}
+.rh-bar .d{flex:1;background:linear-gradient(135deg,var(--coral),var(--gold))}
+.rh-m{font-size:12px;font-weight:700;color:var(--dim);margin-bottom:8px}
+.rhythm p{margin:0;font-size:13px;line-height:1.7;color:var(--dim);word-break:keep-all}
+
+/* ── 핵심 지표 두 칸 (자세 점수 · 스윙 리듬) ──────────── */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:13px 15px;
+  border-top:4px solid var(--dim)}
+.stat.ok{border-top-color:var(--ok)} .stat.mid{border-top-color:var(--teal)}
+.stat.warn{border-top-color:var(--warn)} .stat.bad{border-top-color:var(--bad)}
+.stat .k{display:block;font-size:11.5px;font-weight:800;color:var(--dim);letter-spacing:.2px}
+.stat b{display:block;font-size:33px;font-weight:900;letter-spacing:-1.5px;line-height:1.15;
+  margin:2px 0 1px;font-variant-numeric:tabular-nums;color:var(--dim)}
+.stat.ok b{color:var(--ok)} .stat.mid b{color:var(--teal)}
+.stat.warn b{color:var(--warn)} .stat.bad b{color:var(--bad)}
+.stat b em{font-style:normal;font-size:14px;font-weight:800;opacity:.55;letter-spacing:0}
+.stat .v{display:block;font-size:11.5px;font-weight:700;color:var(--dim);word-break:keep-all;line-height:1.4}
+.rhythm{padding:13px 15px}

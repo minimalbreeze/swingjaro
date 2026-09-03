@@ -246,5 +246,52 @@
       weak.reduce(function (o, k) { o[k] = 1; return o; }, {})) };
   }
 
-  global.SwingAuto = { scan: scan, findPhases: findPhases, buildMarks: buildMarks };
+  /* 전 프레임을 우리 좌표로 바꿔 둔다. 재생할 때 뼈대가 영상을 따라가게 하려면
+   * 단계 몇 개가 아니라 모든 프레임의 관절이 필요하다. */
+  function toTrack(res, view, handed) {
+    return res.track.map(function (f) {
+      var lm = f.lm, m = {};
+      var shL = pt(lm, L.shL), shR = pt(lm, L.shR);
+      var hipL = pt(lm, L.hipL), hipR = pt(lm, L.hipR);
+      var hands = mid(pt(lm, L.wrL), pt(lm, L.wrR));
+      if (view === 'dtl') {
+        m.head = mid(pt(lm, L.earL), pt(lm, L.earR));
+        m.shoulder = mid(shL, shR);
+        m.hip = mid(hipL, hipR);
+        m.knee = mid(pt(lm, L.kneeL), pt(lm, L.kneeR));
+        m.hands = hands;
+      } else {
+        var leadIsLeft = (handed !== 'left');
+        m.head = pt(lm, L.nose);
+        m.leadShoulder = leadIsLeft ? shL : shR;
+        m.trailShoulder = leadIsLeft ? shR : shL;
+        m.leadHip = leadIsLeft ? hipL : hipR;
+        m.trailHip = leadIsLeft ? hipR : hipL;
+        m.hands = hands;
+      }
+      return { t: f.t, marks: m };
+    });
+  }
+
+  /* 리듬·템포 — 구간 시각만 있으면 바로 나온다.
+   * 백스윙에 걸린 시간 ÷ 다운스윙에 걸린 시간. 투어 평균이 대략 3:1 이다.
+   * 이건 추정이 아니라 영상에서 잰 시간이라 믿을 만하다. */
+  function rhythm(res) {
+    var T = function (id) {
+      var i = res.idx[id];
+      return i == null ? null : res.track[i].t;
+    };
+    var p1 = T('P1'), p4 = T('P4'), p7 = T('P7'), p10 = T('P10');
+    if (p1 == null || p4 == null || p7 == null) return null;
+    var back = p4 - p1, down = p7 - p4;
+    if (back <= 0 || down <= 0) return null;
+    return {
+      back: back, down: down,
+      total: (p10 != null ? p10 - p1 : null),
+      ratio: back / down
+    };
+  }
+
+  global.SwingAuto = { scan: scan, findPhases: findPhases, buildMarks: buildMarks,
+    toTrack: toTrack, rhythm: rhythm };
 })(window);

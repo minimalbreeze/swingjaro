@@ -27,6 +27,8 @@
     logFilter: null, logMode: 'carry',
     stepPick: false,   // 단계를 눌러 고른 상태 — 재생/스크럽 전까지 유지한다
     capturing: false,  // 썸네일 캡처 중 (사용자가 만지면 중단한다)
+    track: null,       // 전 프레임 관절 — 재생하면 뼈대가 따라 움직인다
+    rhythm: null,      // 리듬·템포
     profile: { carries: {} },   // 내 기준 거리
     shape: 'draw',              // 내가 치고 싶은 구질
     askOpen: null,              // 펼쳐놓은 증상
@@ -291,6 +293,7 @@
   el['btn-reset'].addEventListener('click', function () {
     if (!confirm('처음부터 다시 시작할까요? 지금 찍은 점들은 사라집니다.')) return;
     S.frames = {}; S.report = null; S.curFrame = null; S.viewFrame = null;
+    S.track = null; S.rhythm = null;
     buildFrames(); show('setup');
   });
 
@@ -373,6 +376,8 @@
         });
         S.autoUsed = true;
         S.ballEstimated = built.ballEstimated;
+        // 전 프레임 관절을 들고 있는다. 재생할 때 뼈대가 영상을 따라간다.
+        S.track = window.SwingAuto.toTrack(res, S.view, S.handed);
         buildFrames();
         autoMsg('분석 중…', null, 0.97);
         return new Promise(function (r) { setTimeout(r, 60); }).then(function () {
@@ -396,6 +401,7 @@
   el['auto-retry'].addEventListener('click', runAuto);
   el['auto-manual'].addEventListener('click', function () {
     S.frames = {}; S.autoUsed = false; S.ballEstimated = false;
+    S.track = null; S.rhythm = null;
     buildFrames(); show('mark');
     seekTo(Math.min(0.05, S.duration));
   });
@@ -411,6 +417,11 @@
     seekTo((this.value / 1000) * S.duration);
   });
   el.video.addEventListener('timeupdate', syncTime);
+  // 재생 중에는 화면 갱신에 맞춰 뼈대를 다시 그린다(timeupdate 는 너무 띄엄띄엄 온다)
+  (function loop() {
+    if (!el.video.paused && S.track && S.report) draw();
+    requestAnimationFrame(loop);
+  })();
   el.video.addEventListener('seeked', function () { syncTime(); draw(); });
   function syncTime() {
     var t = el.video.currentTime || 0;
@@ -741,20 +752,37 @@
       el['stage-badge'].textContent = '지금 찍을 곳: ' + j.label + ' (' + j.hint + ')';
       el['stage-badge'].style.display = '';
     } else if (S.report) {
+      // 긴 설명을 영상 위에 얹으면 정작 스윙이 안 보인다. 단계 이름만 짧게.
       var lb = null;
       D.FRAMES.forEach(function (f) { if (f.id === S.viewFrame) lb = f; });
-      el['stage-badge'].textContent = (lb ? lb.emoji + ' ' + lb.label + ' · ' : '') +
-        '초록 = 정상 플레인 · 주황 = 척추선 · 노랑 = 머리 허용 범위';
+      el['stage-badge'].textContent = lb ? lb.emoji + ' ' + lb.label : '';
       el['stage-badge'].style.display = '';
     } else {
       el['stage-badge'].style.display = 'none';
     }
   }
 
+  // 지금 재생 위치에 가장 가까운 관절 한 벌을 꺼낸다
+  function marksAt(t) {
+    if (!S.track || !S.track.length) return null;
+    var lo = 0, hi = S.track.length - 1;
+    while (lo < hi) {
+      var m = (lo + hi) >> 1;
+      if (S.track[m].t < t) lo = m + 1; else hi = m;
+    }
+    if (lo > 0 && Math.abs(S.track[lo - 1].t - t) < Math.abs(S.track[lo].t - t)) lo--;
+    return S.track[lo].marks;
+  }
   function drawSkeleton() {
     var fid = S.curFrame || S.viewFrame;
-    if (!fid || !S.frames[fid]) return;
-    var marks = S.frames[fid].marks;
+    var marks = null;
+    // 구간을 찍는 중이 아니면, 지금 보고 있는 프레임의 관절을 쓴다.
+    // 재생하면 뼈대가 영상을 따라 움직인다.
+    if (!S.curFrame && S.track) marks = marksAt(el.video.currentTime || 0);
+    if (!marks) {
+      if (!fid || !S.frames[fid]) return;
+      marks = S.frames[fid].marks;
+    }
     var links = S.view === 'dtl'
       ? [['head','shoulder'],['shoulder','hip'],['hip','knee'],['shoulder','hands'],['hands','clubhead']]
       : [['leadShoulder','trailShoulder'],['leadHip','trailHip'],['leadShoulder','leadHip'],
@@ -766,7 +794,7 @@
       var a = toPx(marks[L[0]]), b = toPx(marks[L[1]]);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     });
-    neededFor(fid).forEach(function (j) {
+    neededFor(fid || S.viewFrame).forEach(function (j) {
       if (!marks[j.id]) return;
       var p = toPx(marks[j.id]);
       ctx.beginPath(); ctx.arc(p.x, p.y, 6.5, 0, Math.PI * 2);
@@ -784,6 +812,9 @@
 
   function drawShapes(shapes) {
     ctx.save();
+    // 선 아래 어두운 그림자를 깔아 밝은 잔디·조명 위에서도 읽히게 한다.
+    ctx.shadowColor = 'rgba(0,0,0,.55)';
+    ctx.shadowBlur = 4;
     shapes.forEach(function (sh) {
       ctx.setLineDash(sh.dash || []);
       ctx.lineWidth = sh.width || 2;
@@ -834,6 +865,16 @@
   el['go-report'].addEventListener('click', runAnalysis);
 
   function runAnalysis() {
+    // 리듬·템포 — 백스윙에 걸린 시간 ÷ 다운스윙에 걸린 시간.
+    // 구간 시각만 있으면 되므로 자동이든 직접 찍었든 똑같이 나온다.
+    S.rhythm = null;
+    if (S.frames.P1 && S.frames.P4 && S.frames.P7) {
+      var bk = S.frames.P4.t - S.frames.P1.t, dn = S.frames.P7.t - S.frames.P4.t;
+      if (bk > 0 && dn > 0) {
+        S.rhythm = { back: bk, down: dn, ratio: bk / dn,
+          total: S.frames.P10 ? S.frames.P10.t - S.frames.P1.t : null };
+      }
+    }
     var marks = {};
     Object.keys(S.frames).forEach(function (fid) {
       if (isReady(fid)) marks[fid] = S.frames[fid].marks;
@@ -851,44 +892,53 @@
     S.viewFrame = S.report.framesUsed.indexOf('P7') >= 0 ? 'P7' : S.report.framesUsed[0];
     buildFlow(); buildSeekMarks(); renderStepDetail();
     S.stepPick = false;
-    captureThumbs(function () {
-      buildFlow();
-      if (!S.stepPick) { seekTo(S.frames[S.viewFrame].t); draw(); }
-    });
+    seekTo(S.frames[S.viewFrame].t);
     show('report');
     requestAnimationFrame(function () { fitCanvas(); draw(); });
   }
 
   /* 각 단계의 실제 영상 장면을 작은 그림으로 떠 둔다.
    * 이모지보다 자기 스윙을 알아보기 쉽다. 8번 되감아 캡처하므로 1초 안쪽이다. */
-  function captureThumbs(done) {
-    var ids = D.FRAMES.map(function (f) { return f.id; })
-      .filter(function (id) { return S.frames[id] && isReady(id); });
-    var cv = document.createElement('canvas'), cx = cv.getContext('2d');
-    var vw = el.video.videoWidth || 720, vh = el.video.videoHeight || 1280;
-    var W = 132, H = Math.round(W * vh / vw);
-    cv.width = W; cv.height = H;
-    var i = 0;
-    S.capturing = true;
-    function step() {
-      // 사용자가 단계를 누르거나 재생하면 캡처를 접는다. 영상 위치를 뺏으면 안 된다.
-      if (!S.capturing || i >= ids.length) { S.capturing = false; done && done(); return; }
-      var id = ids[i];
-      var fired = false;
-      function grab() {
-        if (fired) return; fired = true;
-        el.video.removeEventListener('seeked', grab);
-        try {
-          cx.drawImage(el.video, 0, 0, W, H);
-          S.frames[id].thumb = cv.toDataURL('image/jpeg', 0.62);
-        } catch (e) { /* 캡처 실패는 그림만 없을 뿐 분석과 무관하다 */ }
-        i++; setTimeout(step, 0);
-      }
-      el.video.addEventListener('seeked', grab);
-      try { el.video.currentTime = S.frames[id].t; } catch (e) { grab(); }
-      setTimeout(grab, 350);
-    }
-    step();
+  /* 단계 그림 — 영상 캡처 대신 그 순간의 뼈대를 실루엣으로 그린다.
+   * 사진은 배경(연습장 집기, 조명)이 같이 들어와 정작 자세가 안 보인다.
+   * 뼈대만 남기면 어느 단계인지 한눈에 들어온다. 골프픽스가 쓰는 방식이다. */
+  var SIL_LINKS = {
+    dtl: [['head','shoulder'],['shoulder','hip'],['hip','knee'],['shoulder','hands'],['hands','clubhead']],
+    fo: [['leadShoulder','trailShoulder'],['leadHip','trailHip'],['leadShoulder','leadHip'],
+         ['trailShoulder','trailHip'],['head','leadShoulder'],['head','trailShoulder'],
+         ['leadShoulder','hands'],['trailShoulder','hands'],['hands','clubhead']]
+  };
+  function silhouette(fid, ok) {
+    var fr = S.frames[fid];
+    if (!fr) return '';
+    var m = fr.marks, pts = [];
+    Object.keys(m).forEach(function (k) { if (m[k]) pts.push(m[k]); });
+    if (pts.length < 3) return '';
+    // 몸이 칸에 꽉 차도록 맞춘다
+    var xs = pts.map(function (p) { return p.x; }), ys = pts.map(function (p) { return p.y; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs);
+    var y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+    var pad = 0.12;
+    var w = Math.max(1e-3, x1 - x0), hgt = Math.max(1e-3, y1 - y0);
+    var W = 60, H = 80;
+    var sc = Math.min(W * (1 - pad * 2) / w, H * (1 - pad * 2) / hgt);
+    var ox = (W - w * sc) / 2 - x0 * sc, oy = (H - hgt * sc) / 2 - y0 * sc;
+    var X = function (p) { return (p.x * sc + ox).toFixed(1); };
+    var Y = function (p) { return (p.y * sc + oy).toFixed(1); };
+    var col = ok ? '#2f9e75' : '#e2574c';
+    var g = [];
+    (SIL_LINKS[S.view] || SIL_LINKS.dtl).forEach(function (L2) {
+      if (!m[L2[0]] || !m[L2[1]]) return;
+      g.push('<line x1="' + X(m[L2[0]]) + '" y1="' + Y(m[L2[0]]) + '" x2="' + X(m[L2[1]]) +
+        '" y2="' + Y(m[L2[1]]) + '" />');
+    });
+    Object.keys(m).forEach(function (k) {
+      if (!m[k]) return;
+      g.push('<circle cx="' + X(m[k]) + '" cy="' + Y(m[k]) + '" r="3" stroke="none" fill="' + col + '"/>');
+    });
+    return '<svg class="sil" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true">' +
+      '<g stroke="' + col + '" stroke-width="4.5" stroke-linecap="round" fill="none">' +
+      g.join('') + '</g></svg>';
   }
 
   /* ── 스윙 흐름 ────────────────────────────────────────────────
@@ -916,9 +966,8 @@
     el['report-flow'].innerHTML = have.map(function (f) {
       var fl = faultsOfStep(f.id);
       var sev = fl.reduce(function (m, x) { return Math.max(m, x.sev); }, 0);
-      var th = S.frames[f.id].thumb;
-      var shot = th ? '<img class="shot" src="' + th + '" alt="" />'
-                    : '<span class="shot em">' + f.emoji + '</span>';
+      var shot = silhouette(f.id, !fl.length) ||
+        '<span class="shot em">' + f.emoji + '</span>';
       return '<button type="button" class="step' + (S.viewFrame === f.id ? ' sel' : '') +
         (fl.length ? ' bad s' + sev : ' good') + '" data-view-frame="' + f.id + '">' +
         '<span class="nm">' + esc(f.label) + '</span>' + shot +
@@ -1034,52 +1083,47 @@
     var club = D.CLUBS[R.club], view = D.VIEWS[R.view];
     var h = [];
 
-    // "점수"는 잘 친다는 뜻이 아니라 "교과서 범위와 얼마나 겹치는가"다.
-    // 좋은 스코어를 내는 스윙 중에 이 점수가 낮은 것도 얼마든지 있다.
+    /* ① 핵심 지표 — 자세 점수와 스윙 리듬을 나란히.
+     * "점수"는 잘 친다는 뜻이 아니라 "교과서 범위와 얼마나 겹치는가"다. */
     var grade = R.score >= 85 ? '기준 범위와 거의 일치' : R.score >= 70 ? '대체로 기준 안'
               : R.score >= 55 ? '벗어난 구간이 있음' : '벗어난 구간이 많음';
-    var col = R.score >= 85 ? 'var(--ok)' : R.score >= 70 ? 'var(--teal)' : R.score >= 55 ? 'var(--warn)' : 'var(--bad)';
-    h.push('<div class="score"><div class="score-n" style="color:' + col + '">' + R.score +
-      '<small>／100</small></div>' +
-      '<div class="score-t"><b>' + esc(club.label) + ' · ' + esc(view.label) + ' — ' + grade + '</b>' +
-      '<span>구간 ' + R.framesUsed.length + '개에서 ' + R.faults.length + '개 항목이 기준 밖입니다. ' +
-      '이 숫자는 <b>교과서 범위와의 일치도</b>지 실력이나 비거리 점수가 아닙니다.</span></div></div>');
+    var sCls = R.score >= 85 ? 'ok' : R.score >= 70 ? 'mid' : R.score >= 55 ? 'warn' : 'bad';
+    var rh = S.rhythm, rv = null;
+    if (rh) {
+      rv = rh.ratio >= 2.4 && rh.ratio <= 3.6 ? { k: 'ok', t: '좋은 리듬' }
+         : rh.ratio < 2.4 ? { k: 'bad', t: '다운스윙이 급함' }
+         : { k: 'warn', t: '전환이 느슨' };
+    }
+    h.push('<div class="stats">' +
+      '<div class="stat ' + sCls + '"><span class="k">자세 점수</span>' +
+        '<b>' + R.score + '<em>／100</em></b><span class="v">' + esc(grade) + '</span></div>' +
+      (rh
+        ? '<div class="stat ' + rv.k + '"><span class="k">스윙 리듬</span>' +
+          '<b>' + rh.ratio.toFixed(1) + '<em> : 1</em></b><span class="v">' + rv.t + '</span></div>'
+        : '<div class="stat"><span class="k">스윙 리듬</span><b>–</b>' +
+          '<span class="v">구간이 더 필요합니다</span></div>') +
+      '</div>');
+    h.push('<p class="hint" style="margin:-4px 0 14px">' + esc(club.label) + ' · ' + esc(view.label) +
+      ' · 구간 ' + R.framesUsed.length + '개에서 ' + R.faults.length + '개 항목이 기준 밖입니다. ' +
+      '점수는 <b>교과서 범위와의 일치도</b>지 실력이나 비거리 점수가 아닙니다.</p>');
 
-    // 이 화면의 세 층이 각각 어디까지 믿을 수 있는지 먼저 밝힌다.
-    h.push('<details class="basis"><summary>이 진단은 어디까지 믿을 수 있나 <span>펼쳐보기</span></summary>' +
-      '<div class="basis-b">' +
-      '<div class="basis-row"><b class="ok">① 측정값</b><p>내가 찍은 점으로 실제로 잰 값입니다. ' +
-        '다만 휴대폰 한 대로 재는 2D 추정이라 3D 계측기와는 다릅니다. 카메라 각도가 틀어지면 값도 틀어집니다.' +
-        (R.autoUsed ? ' 이번 분석에는 <b>자동 인식</b>이 쓰였습니다. 자동 인식은 관절 중심을 잡으므로 ' +
-          '손으로 찍은 값과 절대 각도가 몇 도 다를 수 있습니다. 회차끼리 비교하려면 방식을 통일하세요.' : '') +
-        '</p></div>' +
-      '<div class="basis-row"><b class="warn">② 정상 범위</b><p>코칭에서 흔히 쓰는 범위를 옮겨 적은 것입니다. ' +
-        '실제 스윙 데이터로 학습하거나 검증한 값이 아니고, 체형·유연성·구질 취향에 따라 나에게 맞는 범위는 다를 수 있습니다.</p></div>' +
-      '<div class="basis-row"><b class="bad">③ 솔루션·장비 제안</b><p>일반적인 교정 통념입니다. ' +
-        '<b>이 앱은 볼을 보지 않습니다.</b> 그래서 "이대로 고치면 더 멀리·똑바로 간다"는 것을 이 앱이 확인해 준 게 아닙니다. ' +
-        '가설로 받아들이고, 아래 결과 기록으로 본인에게 실제로 맞는지 직접 확인하세요.</p></div>' +
-      '</div></details>');
-
-    var SH = window.SwingShot, sh = SH.SHAPES[S.shape];
-    if (sh) {
-      var blocked = R.faults.filter(function (f) { return sh.blockers.indexOf(f.faultId) >= 0; });
-      var watched = R.faults.filter(function (f) { return sh.watch.indexOf(f.faultId) >= 0; });
-      var cls = blocked.length ? 'bad' : watched.length ? 'warn' : 'ok';
-      var msg = blocked.length
-        ? '<b>' + esc(sh.label) + '를 막는 항목이 잡혔습니다.</b> ' +
-          blocked.map(function (f) { return esc(F.FAULTS[f.faultId].title); }).join(', ') +
-          ' — 이 궤도로는 원하는 구질이 안 나옵니다. 그립·볼 위치보다 이게 먼저입니다.'
-        : watched.length
-        ? '<b>방향은 맞는데 과할 수 있습니다.</b> ' +
-          watched.map(function (f) { return esc(F.FAULTS[f.faultId].title); }).join(', ') +
-          ' — ' + esc(sh.label) + '가 나오는 쪽이지만 지나치면 미스가 됩니다.'
-        : '<b>' + esc(sh.label) + '를 막는 항목은 안 잡혔습니다.</b> 셋업을 맞춰 보세요.';
-      h.push('<div class="shape-verdict ' + cls + ' inline"><div class="sv-h">🎯 내 목표 구질: ' +
-        sh.emoji + ' ' + esc(sh.label) + '</div><p>' + msg +
-        '</p><button type="button" class="mini" id="rep-shape">구질 가이드 보기 ›</button></div>');
+    /* ② 리듬 자세히 */
+    if (rh) {
+      var why = rh.ratio < 2.4
+        ? '백스윙에 비해 다운스윙이 너무 빠릅니다. 위에서 서두르면 클럽이 밖으로 나오고 방향이 흔들립니다. 백스윙을 조금 더 천천히 가져가 보세요.'
+        : rh.ratio > 3.6
+        ? '톱에서 머무는 시간이 깁니다. 전환이 끊기면 하체가 먼저 리드하지 못해 힘이 안 실립니다.'
+        : '백스윙과 다운스윙의 시간 비율이 좋습니다. 이 리듬을 기억해 두세요.';
+      var bw = Math.round(rh.back / (rh.back + rh.down) * 100);
+      h.push('<div class="rhythm ' + rv.k + '">' +
+        '<div class="rh-bar"><i class="b" style="width:' + bw + '%">백스윙 ' +
+          rh.back.toFixed(2) + '초</i><i class="d">다운 ' + rh.down.toFixed(2) + '초</i></div>' +
+        '<div class="rh-m">투어 평균 3 : 1' +
+          (rh.total ? ' · 전체 스윙 ' + rh.total.toFixed(2) + '초' : '') + '</div>' +
+        '<p>' + why + '</p></div>');
     }
 
-    /* 대표 진단 — 가장 심각한 문제 하나를 앞에 세운다.
+    /* ③ 대표 진단 — 가장 심각한 문제 하나를 앞에 세운다.
      * 여러 개를 한꺼번에 늘어놓으면 무엇부터 손댈지 알 수 없다. */
     var top1 = R.faults[0];
     if (top1) {
@@ -1102,6 +1146,7 @@
           : '') +
         '</div>');
 
+      /* ④ 집중연습 */
       if (!S.focus || S.focus.faultId !== top1.faultId) {
         h.push('<div class="practice"><b>집중연습으로 해결해 보세요</b>' +
           '<div class="practice-c"><b>' + esc(d1.title) + '</b>' +
@@ -1110,21 +1155,62 @@
           '<button type="button" class="cta" data-focus="' + top1.faultId +
           '">🎯 이걸로 집중연습 시작</button></div>');
       }
+    } else {
+      h.push('<div class="okbox"><b>기준을 벗어난 항목이 없습니다 ⛳</b>' +
+        '<span>잘 친다는 뜻은 아니고, 이 앱이 재는 항목 안에서는 걸린 게 없다는 뜻입니다. ' +
+        '반대쪽 각도(' + esc(D.VIEWS[R.view === 'dtl' ? 'fo' : 'dtl'].label) + ')로도 찍어보세요.</span></div>');
     }
 
+    /* ⑤ 집중 교정 현황 */
+    var fb = focusBlock();
+    if (fb) h.push(fb);
+
+    /* ⑥ 목표 구질과 맞는지 */
+    var SH = window.SwingShot, sh = SH.SHAPES[S.shape];
+    if (sh) {
+      var blocked = R.faults.filter(function (f) { return sh.blockers.indexOf(f.faultId) >= 0; });
+      var watched = R.faults.filter(function (f) { return sh.watch.indexOf(f.faultId) >= 0; });
+      var cls = blocked.length ? 'bad' : watched.length ? 'warn' : 'ok';
+      var msg = blocked.length
+        ? '<b>' + esc(sh.label) + '를 막는 항목이 잡혔습니다.</b> ' +
+          blocked.map(function (f) { return esc(F.FAULTS[f.faultId].title); }).join(', ') +
+          ' — 이 궤도로는 원하는 구질이 안 나옵니다. 그립·볼 위치보다 이게 먼저입니다.'
+        : watched.length
+        ? '<b>방향은 맞는데 과할 수 있습니다.</b> ' +
+          watched.map(function (f) { return esc(F.FAULTS[f.faultId].title); }).join(', ') +
+          ' — ' + esc(sh.label) + '가 나오는 쪽이지만 지나치면 미스가 됩니다.'
+        : '<b>' + esc(sh.label) + '를 막는 항목은 안 잡혔습니다.</b> 셋업을 맞춰 보세요.';
+      h.push('<div class="shape-verdict ' + cls + ' inline"><div class="sv-h">🎯 내 목표 구질: ' +
+        sh.emoji + ' ' + esc(sh.label) + '</div><p>' + msg +
+        '</p><button type="button" class="mini" id="rep-shape">구질 가이드 보기 ›</button></div>');
+    }
+
+    /* ⑦ 자동 분석이 무엇을 재고 무엇을 추정했는지 */
     if (R.auto) {
       h.push('<div class="autonote"><b>🤖 자동으로 분석했습니다</b>' +
-        '<p>구간(어드레스·톱·임팩트·피니시)과 관절을 영상에서 스스로 찾았습니다. ' +
+        '<p>구간과 관절을 영상에서 스스로 찾았습니다. ' +
         (R.ballEstimated
           ? '<b>볼 위치만 추정</b>했습니다 — 클럽과 볼은 사람 관절이 아니라 모델이 못 봅니다. ' +
-            '그래서 클럽헤드가 필요한 항목(톱 클럽 위치, 임팩트 샤프트 기울기)은 빼고 쟀습니다. '
+            '그래서 클럽헤드가 필요한 항목은 빼고 쟀습니다. '
           : '') +
         '결과가 이상하면 <b>구간</b>에서 점을 끌어 고치면 다시 계산됩니다.</p>' +
         '<button type="button" class="mini" id="rep-fix">구간 열어서 손보기 ›</button></div>');
     }
 
-    var fb = focusBlock();
-    if (fb) h.push(fb);
+    /* ⑧ 근거 밝히기 */
+    h.push('<details class="basis"><summary>이 진단은 어디까지 믿을 수 있나 <span>펼쳐보기</span></summary>' +
+      '<div class="basis-b">' +
+      '<div class="basis-row"><b class="ok">① 측정값</b><p>내가 찍은 점으로 실제로 잰 값입니다. ' +
+        '다만 휴대폰 한 대로 재는 2D 추정이라 3D 계측기와는 다릅니다. 카메라 각도가 틀어지면 값도 틀어집니다.' +
+        (R.autoUsed ? ' 자동 인식은 관절 중심을 잡으므로 손으로 찍은 값과 절대 각도가 몇 도 다를 수 있습니다.' : '') +
+        '</p></div>' +
+      '<div class="basis-row"><b class="warn">② 정상 범위</b><p>코칭에서 흔히 쓰는 범위를 옮겨 적은 것입니다. ' +
+        '실제 스윙 데이터로 학습하거나 검증한 값이 아니고, 체형·유연성·구질 취향에 따라 나에게 맞는 범위는 다를 수 있습니다.</p></div>' +
+      '<div class="basis-row"><b class="bad">③ 솔루션·장비 제안</b><p>일반적인 교정 통념입니다. ' +
+        '<b>이 앱은 볼을 보지 않습니다.</b> 그래서 "이대로 고치면 더 멀리·똑바로 간다"는 것을 이 앱이 확인해 준 게 아닙니다. ' +
+        '가설로 받아들이고, 아래 결과 기록으로 본인에게 실제로 맞는지 직접 확인하세요.</p></div>' +
+      '</div></details>');
+
 
     h.push('<div class="legend">' +
       '<i style="--sw:#4dd4ac">정상 플레인 밴드</i>' +
@@ -1156,14 +1242,9 @@
     });
     h.push('</div></div></details>');
 
-    h.push('<p class="hint" style="margin:18px 0 8px">아래는 <b>전체 요약</b>입니다. ' +
-      '구간별로 보려면 위 스윙 흐름에서 단계를 누르세요.</p>');
-
-    if (!R.faults.length) {
-      h.push('<div class="okbox"><b>이 각도에서는 기준을 벗어난 항목이 없습니다 ⛳</b>' +
-        '<span>잘 친다는 뜻은 아니고, 이 앱이 재는 항목 안에서는 걸린 게 없다는 뜻입니다. 반대쪽 각도(' + esc(D.VIEWS[R.view === 'dtl' ? 'fo' : 'dtl'].label) + ')로도 한 번 찍어보세요. ' +
-        '한 각도에서 안 보이는 문제가 다른 각도에서 드러납니다.</span></div>');
-    } else {
+    if (R.faults.length) {
+      h.push('<p class="hint" style="margin:18px 0 8px">아래는 <b>전체 요약</b>입니다. ' +
+        '구간별로 보려면 위 스윙 흐름에서 단계를 누르세요.</p>');
       // 어느 단계에 무엇이 잡혔는지 한눈에. 누르면 그 단계로 이동한다.
       h.push('<div class="sumlist">');
       D.FRAMES.forEach(function (fr) {
