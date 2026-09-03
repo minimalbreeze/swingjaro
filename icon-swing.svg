@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="스윙자로">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f6f5e"/>
+      <stop offset="1" stop-color="#1f5c50"/>
+    </linearGradient>
+    <linearGradient id="arc" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff9166"/>
+      <stop offset="1" stop-color="#ffc66b"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- 스윙 플레인: 볼에서 뻗어 나가는 두 개의 기준선 -->
+  <g stroke="#4dd4ac" stroke-linecap="round" fill="none">
+    <line x1="150" y1="392" x2="404" y2="150" stroke-width="14" opacity=".95"/>
+    <line x1="150" y1="392" x2="360" y2="106" stroke-width="10" stroke-dasharray="26 20" opacity=".62"/>
+  </g>
+  <!-- 스윙 아크 -->
+  <path d="M150 392 A 190 190 0 0 1 330 118" stroke="url(#arc)" stroke-width="22"
+        stroke-linecap="round" fill="none"/>
+  <!-- 볼 -->
+  <circle cx="150" cy="392" r="30" fill="#ffffff"/>
+  <circle cx="150" cy="392" r="30" fill="none" stroke="#1f5c50" stroke-width="6" opacity=".25"/>
+  <!-- 눈금(자로 잰다) -->
+  <g stroke="#ffffff" stroke-width="9" stroke-linecap="round" opacity=".9">
+    <line x1="236" y1="316" x2="262" y2="342"/>
+    <line x1="300" y1="255" x2="326" y2="281"/>
+    <line x1="364" y1="194" x2="390" y2="220"/>
+  </g>
+</svg>

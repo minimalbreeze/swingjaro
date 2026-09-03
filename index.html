@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>스윙자로 – 내 골프 스윙 연습 노트</title>
+<meta name="description" content="혼자 쓰는 골프 스윙 연습 노트. 영상에서 플레인을 재고, 집중 교정 문제 하나를 정해 회차별로 추적한다." />
+<meta name="keywords" content="골프 스윙 분석, 스윙 플레인, 골프 자세 교정, 골프 레슨, 클럽 피팅, 슬라이스 교정, 오버더탑" />
+<link rel="canonical" href="https://minimalbreeze.github.io/swingjaro/" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#1f5c50" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="스윙자로 – 내 스윙, 자로 잰 듯 분석" />
+<meta property="og:description" content="영상 한 개로 스윙 플레인 비교 · 문제 구간 진단 · 연습 드릴 · 장비 세팅 제안까지." />
+<meta property="og:url" content="https://minimalbreeze.github.io/swingjaro/" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon-swing.svg" type="image/svg+xml" />
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="스윙자로" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="stylesheet" href="swing.css" />
+</head>
+<body>
+<div id="app">
+
+  <header class="hd">
+    <div class="hd-in">
+      <h1>스윙자로 <span class="hd-sub">내 연습 노트</span></h1>
+      <span class="hd-actions">
+        <button id="btn-shape" class="hd-btn" type="button">🎯 구질</button>
+        <button id="btn-ask" class="hd-btn" type="button">💬 문의</button>
+        <button id="btn-log" class="hd-btn" type="button">📊 기록</button>
+        <button id="btn-reset" class="hd-btn" type="button">↺</button>
+      </span>
+    </div>
+    <ol class="steps" id="steps">
+      <li data-step="setup">클럽·각도</li>
+      <li data-step="video">영상</li>
+      <li data-step="mark">구간 지정</li>
+      <li data-step="report">진단</li>
+      <li data-step="fit">장비</li>
+      <li data-step="log">기록</li>
+    </ol>
+  </header>
+
+  <main id="main">
+
+    <!-- 이동식 무대 -->
+    <div class="stage" id="stage">
+      <div class="stage-in" id="stage-in">
+        <video id="video" playsinline preload="auto" muted></video>
+        <canvas id="canvas"></canvas>
+        <div class="stage-badge" id="stage-badge"></div>
+      </div>
+    </div>
+
+    <!-- 1. 클럽 · 촬영 각도 -->
+    <section class="screen" id="s-setup">
+      <h2 class="s-title">① 어떤 클럽을, 어느 각도에서 찍었나요?</h2>
+      <p class="s-lead">클럽마다 정상 스윙 플레인 각도가 다릅니다. 촬영 각도에 따라 확인할 수 있는 문제도 달라집니다.</p>
+
+      <h3 class="f-title">클럽</h3>
+      <div class="grid-club" id="club-grid"></div>
+
+      <h3 class="f-title">촬영 각도</h3>
+      <div class="grid-view" id="view-grid"></div>
+
+      <div class="guide-box" id="shoot-guide"></div>
+
+      <h3 class="f-title">내가 치고 싶은 구질</h3>
+      <div class="grid-view" id="shape-grid"></div>
+      <p class="hint">고르면 그 구질에 맞는 그립·볼 위치·정렬 가이드가 생기고, 진단 기준도 그쪽으로 살짝 옮겨집니다.
+        상단 <b>🎯 구질</b> 버튼에서 언제든 다시 볼 수 있습니다.</p>
+
+      <details class="mydist" id="mydist">
+        <summary>📋 내 클럽 거리 <span id="mydist-sum"></span></summary>
+        <div class="mydist-b">
+          <p>여기에 내 캐리 거리를 넣어두면, 장비 화면에서 "아마추어 평균 대비"가 아니라
+            <b>내 기준 대비</b>로 비교합니다. 헤드 스피드 추정도 내 숫자로 계산합니다.
+            비워두면 평균값을 씁니다.</p>
+          <div id="mydist-grid"></div>
+          <p class="hint">기록 화면에서 결과를 쌓으면 실제 기록의 중앙값으로 채워 넣을 수 있습니다.</p>
+        </div>
+      </details>
+
+      <h3 class="f-title">손잡이</h3>
+      <div class="seg" id="hand-seg">
+        <button type="button" data-h="right" class="on">오른손잡이</button>
+        <button type="button" data-h="left">왼손잡이</button>
+      </div>
+      <p class="hint">자동 관절 인식에서 앞쪽/뒤쪽 어깨를 가를 때만 씁니다. 직접 찍을 때는 쓰이지 않습니다.</p>
+
+      <h3 class="f-title">판정 민감도</h3>
+      <div class="seg" id="sens-seg">
+        <button type="button" data-v="strict">엄격</button>
+        <button type="button" data-v="normal" class="on">보통</button>
+        <button type="button" data-v="lenient">관대</button>
+      </div>
+      <p class="hint">엄격은 프로 기준에 가깝게, 관대는 아마추어 허용치를 넓게 봅니다.</p>
+
+      <div class="install" id="install-card" hidden>
+        <div class="install-h">📲 바탕화면에 바로가기 만들기</div>
+        <p>연습장에서 주소창 없이 아이콘 하나로 바로 엽니다. 화면도 넓어져 영상 구간 잡기가 수월해집니다.</p>
+        <button type="button" class="cta install-btn" id="install-btn">바탕화면에 추가</button>
+        <details id="install-steps"><summary>버튼이 안 눌리거나 안 보이면 <span>직접 하는 법</span></summary>
+          <div id="install-steps-b"></div>
+        </details>
+      </div>
+
+      <button class="cta" id="go-video" type="button">영상 올리기 ›</button>
+    </section>
+
+    <!-- 2. 영상 -->
+    <section class="screen" id="s-video" hidden>
+      <h2 class="s-title">② 스윙 영상을 올려주세요</h2>
+      <p class="s-lead">영상은 이 기기 안에서만 처리됩니다. 어디에도 올라가지 않습니다.</p>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept="video/*" hidden />
+        <span class="drop-ico">🎬</span>
+        <span class="drop-t">영상 파일 선택</span>
+        <span class="drop-s">MP4 · MOV · 60fps 이상 권장</span>
+      </label>
+      <div class="guide-box" id="shoot-guide-2"></div>
+    </section>
+
+    <!-- 3. 키프레임 지정 + 관절 마킹 -->
+    <section class="screen wide" id="s-mark" hidden>
+      <h2 class="s-title">③ 구간을 잡고 관절을 찍어주세요</h2>
+
+      <!-- 무대는 하나뿐이다. 구간 지정 화면과 진단 화면이 번갈아 가져다 쓴다. -->
+      <div id="stage-slot-mark"></div>
+
+      <div class="scrub">
+        <input type="range" id="seek" min="0" max="1000" value="0" />
+        <div class="scrub-row">
+          <button type="button" class="mini" data-nudge="-10">≪</button>
+          <button type="button" class="mini" data-nudge="-1">‹ 1프레임</button>
+          <span class="tcode" id="tcode">0.00s</span>
+          <button type="button" class="mini" data-nudge="1">1프레임 ›</button>
+          <button type="button" class="mini" data-nudge="10">≫</button>
+        </div>
+        <div class="scrub-row">
+          <button type="button" class="mini" id="play">▶ 재생</button>
+          <span class="seg tiny" id="rate-seg">
+            <button type="button" data-r="0.15">0.15×</button>
+            <button type="button" data-r="0.35" class="on">0.35×</button>
+            <button type="button" data-r="1">1×</button>
+          </span>
+        </div>
+      </div>
+
+      <div class="frames" id="frames"></div>
+
+      <div class="mark-panel" id="mark-panel" hidden>
+        <div class="mark-head">
+          <strong id="mark-frame"></strong>
+          <span id="mark-progress" class="mark-prog"></span>
+        </div>
+        <div class="mark-target" id="mark-target"></div>
+        <p class="auto-note" id="auto-note" hidden></p>
+        <div class="mark-btns">
+          <button type="button" class="mini auto" id="mark-auto">🤖 자동으로 찍기</button>
+          <button type="button" class="mini" id="mark-undo">↺ 한 점 취소</button>
+          <button type="button" class="mini" id="mark-copy">이전 구간에서 복사</button>
+          <button type="button" class="mini" id="mark-clear">전체 지우기</button>
+          <button type="button" class="mini prim" id="mark-done">완료</button>
+        </div>
+      </div>
+
+      <button class="cta" id="go-report" type="button" disabled>분석 결과 보기 ›</button>
+      <p class="hint" id="mark-need"></p>
+    </section>
+
+    <!-- 4. 진단 -->
+    <section class="screen wide" id="s-report" hidden>
+      <h2 class="s-title">④ 진단 결과</h2>
+      <p class="s-lead">아래 구간 버튼을 누르면 그 순간의 영상 위에 정상 플레인과 내 스윙이 함께 그려집니다.</p>
+      <div id="stage-slot-report"></div>
+      <div class="frames" id="report-frames"></div>
+      <div id="report"></div>
+      <div id="outcome-slot"></div>
+      <button class="cta" id="go-fit" type="button">구질·거리 넣고 장비 세팅 받기 ›</button>
+    </section>
+
+    <!-- 5. 장비 -->
+    <section class="screen" id="s-fit" hidden>
+      <h2 class="s-title">⑤ 구질과 거리를 알려주세요</h2>
+      <p class="s-lead">평소 이 클럽으로 가장 자주 나오는 구질을 고르면, 그 구질을 줄이는 장비 세팅을 계산합니다.</p>
+
+      <h3 class="f-title">구질</h3>
+      <div class="grid-flight" id="flight-grid"></div>
+
+      <h3 class="f-title">탄도</h3>
+      <div class="seg" id="traj-seg"></div>
+
+      <h3 class="f-title">주로 맞는 위치</h3>
+      <div class="seg wrap" id="contact-seg"></div>
+
+      <h3 class="f-title">이 클럽 평균 캐리 거리</h3>
+      <div class="carry">
+        <input type="number" id="carry" inputmode="numeric" placeholder="예: 200" min="10" max="400" />
+        <span>야드</span>
+      </div>
+      <p class="hint">캐리(공중에 떠서 간 거리)를 넣으면 헤드 스피드와 샤프트 강도를 추정합니다. 모르면 비워두세요.</p>
+
+      <button class="cta" id="go-fitresult" type="button">장비 세팅 제안 보기 ›</button>
+      <div id="fitreport"></div>
+    </section>
+
+    <!-- 6. 목표 구질 가이드 -->
+    <section class="screen" id="s-shape" hidden>
+      <h2 class="s-title">🎯 내 구질 가이드</h2>
+      <div class="seg" id="shape-seg"></div>
+      <div id="shapebox"></div>
+    </section>
+
+    <!-- 7. 증상 문의 -->
+    <section class="screen" id="s-ask" hidden>
+      <h2 class="s-title">💬 잘 안 되는 것 물어보기</h2>
+      <p class="s-lead">지금 안 되는 걸 고르면 원인·점검·교정을 알려드립니다.
+        최근 분석 결과가 있으면 <b>그 원인이 실제로 내 스윙에서 잡혔는지</b>까지 대조합니다.</p>
+      <div class="asksearch">
+        <input type="search" id="ask-q" placeholder="예: 오른쪽으로 밀려요 / 뒤땅 / 거리" autocomplete="off" />
+      </div>
+      <div id="askbox"></div>
+    </section>
+
+    <!-- 8. 기록 · 대조 -->
+    <section class="screen" id="s-log" hidden>
+      <h2 class="s-title">📊 결과 기록</h2>
+      <p class="s-lead">이 앱은 볼을 보지 않습니다. 그래서 "진단대로 고치면 정말 더 멀리·똑바로 가는가"는
+        이 앱이 아니라 <b>내 기록</b>이 답해야 합니다. 회차가 쌓이면 점수와 실제 결과가 같이 움직이는지 보여드립니다.</p>
+      <div id="logbox"></div>
+    </section>
+
+  </main>
+
+  <footer class="ft">
+    <p><strong>스윙자로가 하는 일과 하지 않는 일.</strong> 휴대폰 영상 한 대로 관절 위치를 재서 각도와 비율을 계산합니다(<strong>2D 추정</strong>). 그 값을 코칭에서 흔히 쓰는 범위와 비교해 벗어난 구간을 알려줍니다.</p>
+    <p><strong>하지 않는 일:</strong> 볼을 보지 않습니다. 그래서 "이렇게 고치면 더 멀리·똑바로 간다"를 이 앱이 검증한 것이 아닙니다. 솔루션과 장비 제안은 일반 통념이며, 실제 스윙 데이터로 학습하거나 결과로 검증한 값이 아닙니다. 통증이 있는 동작은 반드시 전문가와 상의하세요.</p>
+    <p class="ft-links">영상·좌표·기록은 전부 이 기기 안에만 있습니다. 아무 데도 올라가지 않습니다.</p>
+  </footer>
+</div>
+
+<script src="swing-data.js"></script>
+<script src="swing-faults.js"></script>
+<script src="swing-analyze.js"></script>
+<script src="swing-pose.js"></script>
+<script src="swing-install.js"></script>
+<script src="swing-shot.js"></script>
+<script src="swing-log.js"></script>
+<script src="swing.js"></script>
+</body>
+</html>
